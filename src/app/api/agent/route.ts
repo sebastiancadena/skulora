@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       ...(body.previous_response_id ? { previous_response_id: body.previous_response_id } : { instructions: SYSTEM }),
       input: body.input,
       tools: body.tools.map((t) => ({ type: "function", name: t.name, description: t.description.slice(0, 1024), parameters: t.parameters })),
-      parallel_tool_calls: false,
+      parallel_tool_calls: true, // mission writes are compare-and-set, so parallel searches are safe
     }),
     signal: req.signal,
   });

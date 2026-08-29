@@ -40,19 +40,24 @@ export default function AgentPanel() {
         prevId.current = data.response_id;
         if (data.text) push({ who: "agent", text: data.text });
         if (!data.calls?.length) break;
-        input = [];
-        for (const call of data.calls) {
-          const tool = tools.find((t) => t.name === call.name);
-          let output: unknown;
-          try {
-            const args = call.arguments ? JSON.parse(call.arguments) : {};
-            output = tool ? await tool.execute(args) : { error: `unknown tool ${call.name}` };
-          } catch (e) {
-            output = { error: String((e as Error).message) };
-          }
-          push({ who: "tool", text: `${call.name}(${call.arguments.slice(0, 80)}${call.arguments.length > 80 ? "…" : ""})` });
-          input.push({ type: "function_call_output", call_id: call.call_id, output: JSON.stringify(output).slice(0, 6000) });
-        }
+        // Execute every requested tool call concurrently (the server serializes writes with compare-and-set).
+        for (const call of data.calls) push({ who: "tool", text: `▶ ${call.name}(${call.arguments.slice(0, 80)}${call.arguments.length > 80 ? "…" : ""})` });
+        input = await Promise.all(
+          data.calls.map(async (call) => {
+            const tool = tools.find((t) => t.name === call.name);
+            const t0 = performance.now();
+            let output: unknown;
+            try {
+              const args = call.arguments ? JSON.parse(call.arguments) : {};
+              output = tool ? await tool.execute(args) : { error: `unknown tool ${call.name}` };
+            } catch (e) {
+              output = { error: String((e as Error).message) };
+            }
+            const err = (output as { error?: string })?.error;
+            push({ who: "tool", text: `${err ? "✗" : "✓"} ${call.name} ${((performance.now() - t0) / 1000).toFixed(1)}s${err ? ` — ${err.slice(0, 80)}` : ""}` });
+            return { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(output).slice(0, 6000) };
+          }),
+        );
       }
     } catch (e) {
       push({ who: "agent", text: `Error: ${(e as Error).message}` });
