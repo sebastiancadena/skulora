@@ -1,5 +1,5 @@
 /**
- * The Outfitter tool table. One source of truth consumed by:
+ * The Skulora tool table. One source of truth consumed by:
  *   - the browser's WebMCP surface (document.modelContext.registerTool)
  *   - the built-in agent (same name/schema/execute, no browser support needed)
  *

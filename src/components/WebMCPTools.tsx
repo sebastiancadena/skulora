@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Registers Outfitter's tools with the browser's WebMCP surface.
+ * Registers Skulora's tools with the browser's WebMCP surface.
  * Renders a small status chip so a judge can see at a glance whether their browser exposes
  * `document.modelContext` (ChatGPT desktop browser, Chrome 149+ with the WebMCP flag).
  */

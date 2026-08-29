@@ -1,4 +1,4 @@
-# Outfitter
+# Skulora
 
 A shared planning board where a person and their agent plan a shopping **mission** together — *"outfit me for a 3-day desert backpacking trip, under $600, I already own a stove"* — across every Shopify merchant, ending in one real checkout link per merchant.
 
