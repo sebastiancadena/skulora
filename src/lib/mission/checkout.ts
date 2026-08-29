@@ -24,10 +24,10 @@ export async function prepareCheckout(m: Mission, signal?: AbortSignal): Promise
       }
       try {
         const payload = await updateCart(cart.merchant_domain, items, undefined, signal);
-        const { cartId, checkoutUrl } = extractCart(payload);
+        const { cartId, checkoutUrl, errors } = extractCart(payload);
         cart.cart_id = cartId;
         cart.checkout_url = checkoutUrl;
-        if (!checkoutUrl) cart.error = "merchant returned no checkout URL";
+        if (!checkoutUrl) cart.error = errors.length ? errors.join("; ").slice(0, 200) : "merchant returned no checkout URL";
       } catch (e) {
         cart.error = String((e as Error).message).slice(0, 120);
       }

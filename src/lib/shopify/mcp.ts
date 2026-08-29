@@ -153,11 +153,14 @@ export function getCart(merchantDomain: string, cartId: string, signal?: AbortSi
   return callTool<CartResult>(storefrontUrl(merchantDomain), "get_cart", { cart_id: cartId }, { signal });
 }
 
-/** Extract cart id + checkout URL from whatever shape the store returns (text or structured). */
-export function extractCart(payload: unknown): { cartId?: string; checkoutUrl?: string } {
+/** Extract cart id, checkout URL and merchant error messages from whatever shape the store returns. */
+export function extractCart(payload: unknown): { cartId?: string; checkoutUrl?: string; errors: string[] } {
   const s = typeof payload === "string" ? payload : JSON.stringify(payload);
+  const obj = (typeof payload === "object" && payload ? payload : {}) as { errors?: { message?: string }[] };
+  const errors = (obj.errors ?? []).map((e) => e.message ?? "").filter(Boolean);
   return {
     cartId: s.match(/gid:\/\/shopify\/Cart\/[^"\\\s]+/)?.[0],
     checkoutUrl: s.match(/https:\/\/[^"\\\s]+\/cart\/c\/[^"\\\s]+/)?.[0],
+    errors,
   };
 }

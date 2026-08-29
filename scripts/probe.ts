@@ -61,7 +61,7 @@ async function main() {
       if (withCarts && row.ok && variant) {
         const cart = await updateCart(m.domain, [{ product_variant_id: variant.id, quantity: 1 }]);
         const { cartId, checkoutUrl } = extractCart(cart);
-        row.cart = { cart_id: cartId ? "present" : "missing", checkout_url: checkoutUrl ? "present" : "missing" };
+        row.cart = { cart_id: cartId ? "present" : "missing", checkout_url: checkoutUrl ? "present" : "missing" }; // errors ignored in probe
         withCarts = false; // one real cart is enough evidence
       }
     } catch (e) {
