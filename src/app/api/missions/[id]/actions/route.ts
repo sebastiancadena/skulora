@@ -5,7 +5,7 @@
  */
 export const maxDuration = 60; // plan + fan-out search can exceed the 10 s default
 
-import { mutateMission, NotFound } from "@/lib/mission/repo";
+import { getMission, mutateMission, NotFound } from "@/lib/mission/repo";
 import { planKit } from "@/lib/mission/planner";
 import { searchForSlot } from "@/lib/mission/search";
 import { prepareCheckout } from "@/lib/mission/checkout";
@@ -27,7 +27,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const extra: Record<string, unknown> = {};
 
   try {
-    const m = await mutateMission(id, async (m) => {
+    // Slow, side-effect-free work happens here against a snapshot; the mutation below is cheap and retried on conflict.
+    const snapshot = await getMission(id);
+    if (!snapshot) throw new NotFound(id);
+    let planned: Awaited<ReturnType<typeof planKit>> | undefined;
+    let searched: Awaited<ReturnType<typeof searchForSlot>> | undefined;
+    let checkout: Awaited<ReturnType<typeof prepareCheckout>> | undefined;
+    if (body.type === "plan") {
+      const style = (["minimal", "balanced", "premium"] as const).find((s) => s === body.style) ?? "balanced";
+      planned = await planKit(snapshot, style, req.signal);
+      extra.style = style;
+    } else if (body.type === "search") {
+      searched = await searchForSlot(snapshot, findSlot(snapshot, body.slot_id), {
+        query: typeof body.query === "string" ? body.query : undefined,
+        price_max_cents: typeof body.price_max_cents === "number" ? body.price_max_cents : undefined,
+        merchant_domain: typeof body.merchant_domain === "string" ? body.merchant_domain : undefined,
+        limit: typeof body.limit === "number" ? body.limit : undefined,
+        signal: req.signal,
+      });
+    } else if (body.type === "prepare_checkout") {
+      checkout = await prepareCheckout(snapshot, req.signal);
+    }
+
+    const m = await mutateMission(id, (m) => {
       const log = (type: string, detail?: unknown) =>
         m.events.push({ seq: (m.events.at(-1)?.seq ?? 0) + 1, at: new Date().toISOString(), actor, type, detail });
       const stale = typeof body.version === "number" && body.version !== m.version;
@@ -41,29 +63,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           break;
         }
         case "plan": {
-          const style = (["minimal", "balanced", "premium"] as const).find((s) => s === body.style) ?? "balanced";
-          const { notes, slots } = await planKit(m, style, req.signal);
+          const { notes, slots } = planned!;
           const locked = m.slots.filter((s) => s.locked);
           m.slots = [...locked, ...slots.filter((s) => !locked.some((l) => l.id === s.id))];
           extra.notes = notes;
-          log("plan_kit", { style, slots: m.slots.map((s) => s.id) });
+          log("plan_kit", { style: extra.style, slots: m.slots.map((s) => s.id) });
           break;
         }
         case "search": {
           const slot = findSlot(m, body.slot_id);
-          const r = await searchForSlot(m, slot, {
-            query: typeof body.query === "string" ? body.query : undefined,
-            price_max_cents: typeof body.price_max_cents === "number" ? body.price_max_cents : undefined,
-            merchant_domain: typeof body.merchant_domain === "string" ? body.merchant_domain : undefined,
-            limit: typeof body.limit === "number" ? body.limit : undefined,
-            signal: req.signal,
-          });
+          const r = searched!;
           const existing = new Set(slot.candidates.map((c) => c.product_id));
-          slot.candidates.push(...r.candidates.filter((c) => !existing.has(c.product_id)));
-          extra.candidates = r.candidates;
+          const added = r.candidates.filter((c) => !existing.has(c.product_id));
+          slot.candidates.push(...added);
+          // Report ids as they exist on the board (a duplicate product keeps its earlier id).
+          extra.candidates = r.candidates.map((c) => slot.candidates.find((x) => x.product_id === c.product_id) ?? c);
           extra.sources = r.sources;
           if (r.errors.length) extra.errors = r.errors;
-          log("search_products", { slot_id: slot.id, added: r.candidates.length });
+          log("search_products", { slot_id: slot.id, added: added.length });
           break;
         }
         case "choose": {
@@ -93,7 +110,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           break;
         }
         case "prepare_checkout": {
-          const r = await prepareCheckout(m, req.signal);
+          const r = checkout!;
           m.carts = r.carts;
           log("prepare_checkout", { merchants: Object.keys(r.carts) });
           break;
