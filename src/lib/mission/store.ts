@@ -29,11 +29,39 @@ export interface Slot {
   rejected: string[];
 }
 
+const KEY = "skulora.mission.v1";
 let mission: Mission | null = null;
 const listeners = new Set<() => void>();
 let seq = 0;
+let hydrated = false;
+
+/** Load the last mission from localStorage (client only). Idempotent. */
+export function hydrate() {
+  if (hydrated || typeof window === "undefined") return;
+  hydrated = true;
+  try {
+    const raw = window.localStorage.getItem(KEY);
+    if (raw) {
+      mission = JSON.parse(raw) as Mission;
+      seq = mission.events.at(-1)?.seq ?? 0;
+    }
+  } catch {
+    /* corrupt or unavailable storage: start empty */
+  }
+}
+
+function persist() {
+  try {
+    if (typeof window === "undefined") return;
+    if (mission) window.localStorage.setItem(KEY, JSON.stringify(mission));
+    else window.localStorage.removeItem(KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 export function getMission() {
+  hydrate();
   return mission;
 }
 
@@ -43,8 +71,10 @@ export function subscribe(fn: () => void) {
 }
 
 export function update(actor: MissionEvent["actor"], type: string, mutate: (m: Mission | null) => Mission | null, detail?: unknown) {
+  hydrate();
   mission = mutate(mission);
   if (mission) mission.events.push({ seq: ++seq, at: new Date().toISOString(), actor, type, detail });
+  persist();
   listeners.forEach((fn) => fn());
   return mission;
 }
