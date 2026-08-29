@@ -15,7 +15,7 @@ ZONE=$(curl -s "${H[@]}" "$API/zones?name=$DOMAIN" | python3 -c 'import sys,json
 upsert() { # type name content
   local type=$1 name=$2 content=$3
   local existing
-  existing=$(curl -s "${H[@]}" "$API/zones/$ZONE/dns_records?name=$name" | python3 -c 'import sys,json;print(" ".join(f"{r[\"id\"]}:{r[\"type\"]}" for r in json.load(sys.stdin).get("result") or []))')
+  existing=$(curl -s "${H[@]}" "$API/zones/$ZONE/dns_records?name=$name" | python3 -c 'import sys,json;print(" ".join(r["id"]+":"+r["type"] for r in json.load(sys.stdin).get("result") or []))')
   local body="{\"type\":\"$type\",\"name\":\"$name\",\"content\":\"$content\",\"ttl\":1,\"proxied\":false,\"comment\":\"vercel (scripts/dns-vercel.sh)\"}"
   for e in $existing; do
     local id=${e%%:*} t=${e##*:}

@@ -6,7 +6,7 @@ Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability 
 
 ## Try it (judges)
 
-1. Open the live URL in **ChatGPT's desktop browser** (GPT-5.6 Sol/Terra) or in **Chrome 149+** with `chrome://flags/#enable-webmcp-testing` enabled. The status chip top-right turns green when tools are registered.
+1. Open **https://outfitter.skulora.com** in **ChatGPT's desktop browser** (GPT-5.6 Sol/Terra) or in **Chrome 149+** with `chrome://flags/#enable-webmcp-testing` enabled. The status chip top-right turns green when tools are registered.
 2. Ask the agent: *"Outfit me for a 3-day desert backpacking trip. Budget $600. I already own a stove and a headlamp. I run hot at night."*
 3. Watch the board fill; **lock** or **reject** items; ask the agent to re-plan — it sees your edits in `mission_delta`.
 4. Chrome: DevTools → Application → **WebMCP** shows the tools and the invocation log.
