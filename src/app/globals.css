@@ -1,15 +1,51 @@
 @import "tailwindcss";
 
-/* Skulora is a light-theme board (judged on screen and on video); do not follow the OS dark mode. */
+/*
+ * Skulora design tokens — "expedition map". Colour values mirror src/lib/brand/tokens.ts.
+ * Skulora is a light-theme board (judged on screen and on video); do not follow the OS dark mode.
+ */
 :root {
   color-scheme: light;
-  --background: #fafafa;
-  --foreground: #18181b;
+  --background: #fbf8f2;
+  --foreground: #1c1a17;
 }
 
-@theme inline {
+@theme {
+  /* palette */
+  --color-paper: #fbf8f2;
+  --color-paper-2: #f4efe6;
+  --color-line: #e6dfd2;
+  --color-line-strong: #d3cabb;
+  --color-ink: #1c1a17;
+  --color-ink-soft: #4a453e;
+  --color-ink-muted: #6b645b;
+  --color-ink-faint: #a39b90;
+  --color-pine-50: #edf4ef;
+  --color-pine-100: #d7e6dc;
+  --color-pine-300: #8fb89e;
+  --color-pine-600: #2e6b4e;
+  --color-pine-700: #1f4d3a;
+  --color-pine-900: #10281e;
+  --color-ochre-50: #fbf3e3;
+  --color-ochre-100: #f6e3bc;
+  --color-ochre-300: #ecc47a;
+  --color-ochre-500: #e2a33b;
+  --color-ochre-700: #b57a1b;
+  --color-ochre-900: #6e4a0e;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbe9e7;
+  /* semantic */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-agent: var(--color-pine-600);
+  --color-human: var(--color-ink);
+  --color-locked: var(--color-ochre-500);
+  /* shape, depth, motion */
+  --radius-card: 14px;
+  --radius-chip: 6px;
+  --shadow-card: 0 1px 2px rgb(28 26 23 / 0.04), 0 4px 16px -8px rgb(28 26 23 / 0.12);
+  --shadow-raised: 0 2px 4px rgb(28 26 23 / 0.06), 0 12px 32px -12px rgb(28 26 23 / 0.2);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
@@ -22,9 +58,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
 }
 
-/* Base layer so Tailwind utilities (bg-zinc-900 etc.) still win over these defaults. */
+/* Base layer so Tailwind utilities still win over these defaults. */
 @layer base {
   input,
   button,
@@ -35,5 +72,106 @@ body {
   }
   button {
     cursor: pointer;
+    transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out), border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+  }
+  button:focus-visible,
+  input:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--color-ochre-500);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-ochre-100);
+  }
+}
+
+@layer components {
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-chip);
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    color: var(--color-ink-soft);
+    background: #fff;
+  }
+  .btn:hover {
+    border-color: var(--color-pine-600);
+    color: var(--color-pine-700);
+    background: var(--color-pine-50);
+  }
+  .btn-primary {
+    border-color: var(--color-pine-700);
+    background: var(--color-pine-700);
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background: var(--color-pine-900);
+    border-color: var(--color-pine-900);
+    color: #fff;
+  }
+  .btn-locked {
+    border-color: var(--color-ochre-700);
+    background: var(--color-ochre-500);
+    color: var(--color-ink);
+  }
+  .btn-locked:hover {
+    background: var(--color-ochre-300);
+    border-color: var(--color-ochre-700);
+    color: var(--color-ink);
+  }
+  .chip {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 0.0625rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  /* Waypoint rail on slot cards: the dot connects each slot to the next like stops on a route. */
+  /* Pair with the `pl-8` utility on the card (utilities outrank this layer, so the padding lives there). */
+  .waypoint {
+    position: relative;
+  }
+  .waypoint::before {
+    content: "";
+    position: absolute;
+    left: 1.1875rem;
+    top: 2rem;
+    bottom: 0.75rem;
+    border-left: 2px dashed var(--color-line-strong);
+  }
+  .waypoint-dot {
+    position: absolute;
+    left: 0.75rem;
+    top: 0.9375rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    border: 2px solid var(--color-line-strong);
+    background: #fff;
+    transition: all 150ms var(--ease-out);
+  }
+  .waypoint-dot[data-state="chosen"] {
+    border-color: var(--color-pine-600);
+    background: var(--color-pine-600);
+    box-shadow: 0 0 0 3px var(--color-pine-100);
+  }
+  .waypoint-dot[data-state="locked"] {
+    border-color: var(--color-ochre-700);
+    background: var(--color-ochre-500);
+    box-shadow: 0 0 0 3px var(--color-ochre-100);
+  }
+  .waypoint-dot[data-state="empty"] {
+    border-style: dashed;
   }
 }

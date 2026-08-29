@@ -7,7 +7,7 @@
  *   2. Each curated merchant's Storefront MCP lists tools and answers a search.
  *   3. (--carts) update_cart on one merchant returns a real cart id + checkout URL.
  */
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
   GLOBAL_CATALOG_URL,
   extractCart,
@@ -74,6 +74,9 @@ async function main() {
   }
 
   evidence.finished = new Date().toISOString();
+  // Keep the brand check (pnpm brand --check) alongside the merchant probe.
+  const prev = existsSync("evidence.json") ? JSON.parse(readFileSync("evidence.json", "utf8")) : {};
+  if (prev.brand) (evidence as Record<string, unknown>).brand = prev.brand;
   writeFileSync("evidence.json", JSON.stringify(evidence, null, 2));
   const gc = evidence.global_catalog as { ok: boolean; products?: number; distinct_sellers?: number; ms: number };
   console.log(`\nGlobal Catalog: ${gc.ok ? "OK" : "ERR"} ${gc.products ?? 0} products from ${gc.distinct_sellers ?? 0} sellers (${gc.ms} ms)`);

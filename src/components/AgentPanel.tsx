@@ -73,29 +73,29 @@ export default function AgentPanel() {
   }
 
   return (
-    <aside className="flex h-[70vh] flex-col rounded-xl border border-zinc-200 bg-white text-zinc-900">
-      <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold">
-        Built-in agent <span className="font-normal text-zinc-500">— same tools as ChatGPT sees; your board edits reach it as <code>mission_delta</code></span>
+    <aside className="card flex h-[70vh] min-w-0 flex-col overflow-hidden text-ink">
+      <div className="border-b border-line bg-paper-2 px-3 py-2 text-sm font-semibold">
+        Built-in agent <span className="font-normal text-ink-muted">— same tools as ChatGPT sees; your board edits reach it as <code>mission_delta</code></span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
-        {lines.length === 0 && <p className="text-zinc-500">Try: “Outfit me for a 3-day desert backpacking trip, budget $600, I already own a stove. I run hot at night.”</p>}
+        {lines.length === 0 && <p className="text-ink-muted">Try: “Outfit me for a 3-day desert backpacking trip, budget $600, I already own a stove. I run hot at night.”</p>}
         {lines.map((l, i) => (
           <div key={i} className={l.who === "you" ? "text-right" : ""}>
-            <span className={`inline-block max-w-[95%] rounded-lg px-2 py-1 ${l.who === "you" ? "bg-zinc-900 text-white" : l.who === "tool" ? "font-mono text-xs text-zinc-500" : l.who === "delta" ? "border border-amber-300 bg-amber-50 text-xs text-amber-900" : "bg-zinc-100"}`}>{l.text}</span>
+            <span className={`inline-block max-w-[95%] rounded-lg px-2 py-1 ${l.who === "you" ? "bg-ink text-white" : l.who === "tool" ? "font-mono text-xs text-ink-muted" : l.who === "delta" ? "border border-ochre-300 bg-ochre-50 text-xs text-ochre-900" : "bg-pine-50 text-ink"}`}>{l.text}</span>
           </div>
         ))}
-        {busy && <div className="text-xs text-zinc-400">working…</div>}
+        {busy && <div className="text-xs text-ink-muted">working…</div>}
         <div ref={bottom} />
       </div>
       <form
-        className="flex gap-2 border-t border-zinc-200 p-2"
+        className="flex gap-2 border-t border-line bg-paper-2 p-2"
         onSubmit={(e) => {
           e.preventDefault();
           void send(input);
         }}
       >
-        <input className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Tell the agent what you need…" disabled={busy} />
-        <button className="rounded bg-zinc-900 px-3 py-1 text-sm text-white disabled:opacity-50" disabled={busy}>Send</button>
+        <input className="flex-1 rounded-[var(--radius-chip)] border border-line-strong px-2 py-1 text-sm" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Tell the agent what you need…" disabled={busy} />
+        <button className="btn btn-primary px-3 py-1 text-sm disabled:opacity-50" disabled={busy}>Send</button>
       </form>
     </aside>
   );

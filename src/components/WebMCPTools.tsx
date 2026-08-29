@@ -52,15 +52,15 @@ export default function WebMCPTools() {
   }, [stage]);
 
   const color =
-    status === "registered" ? "bg-emerald-600" : status === "unsupported" ? "bg-zinc-500" : status === "error" ? "bg-red-600" : "bg-amber-500";
+    status === "registered" ? "bg-pine-600" : status === "unsupported" ? "bg-ink-faint" : status === "error" ? "bg-danger" : "bg-ochre-500";
 
   return (
-    <div className="flex items-center gap-2 text-sm" title={detail}>
+    <div className="card flex items-center gap-2 px-3 py-1.5 text-sm" title={detail}>
       <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} />
       <span>
         WebMCP: <strong>{status}</strong>
       </span>
-      <span className="text-zinc-500">{detail}</span>
+      <span className="hidden max-w-[28rem] truncate text-xs text-ink-muted md:inline">{detail}</span>
     </div>
   );
 }
