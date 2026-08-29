@@ -24,15 +24,16 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Form controls and cards keep a white surface with visible borders regardless of OS theme. */
-input,
-button,
-select,
-textarea {
-  color: inherit;
-  background-color: #ffffff;
-}
-
-button {
-  cursor: pointer;
+/* Base layer so Tailwind utilities (bg-zinc-900 etc.) still win over these defaults. */
+@layer base {
+  input,
+  button,
+  select,
+  textarea {
+    color: inherit;
+    background-color: #ffffff;
+  }
+  button {
+    cursor: pointer;
+  }
 }
