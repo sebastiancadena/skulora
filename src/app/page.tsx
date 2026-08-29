@@ -4,7 +4,7 @@ import WebMCPTools from "@/components/WebMCPTools";
 
 export default function Home() {
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
+    <main className="mx-auto max-w-6xl space-y-6 p-6 text-zinc-900">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">

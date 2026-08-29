@@ -69,8 +69,8 @@ export default function AgentPanel() {
   }
 
   return (
-    <aside className="flex h-[70vh] flex-col rounded-xl border border-zinc-200">
-      <div className="border-b px-3 py-2 text-sm font-semibold">
+    <aside className="flex h-[70vh] flex-col rounded-xl border border-zinc-200 bg-white text-zinc-900">
+      <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold">
         Built-in agent <span className="font-normal text-zinc-500">— same tools, no WebMCP browser needed</span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
@@ -84,13 +84,13 @@ export default function AgentPanel() {
         <div ref={bottom} />
       </div>
       <form
-        className="flex gap-2 border-t p-2"
+        className="flex gap-2 border-t border-zinc-200 p-2"
         onSubmit={(e) => {
           e.preventDefault();
           void send(input);
         }}
       >
-        <input className="flex-1 rounded border px-2 py-1 text-sm" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Tell the agent what you need…" disabled={busy} />
+        <input className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Tell the agent what you need…" disabled={busy} />
         <button className="rounded bg-zinc-900 px-3 py-1 text-sm text-white disabled:opacity-50" disabled={busy}>Send</button>
       </form>
     </aside>

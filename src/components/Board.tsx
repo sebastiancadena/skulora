@@ -42,7 +42,7 @@ function CandidateCard({ slot, c }: { slot: Slot; c: Candidate }) {
   const selected = slot.selected === c.id;
   const rejected = slot.rejected.some((r) => r.candidate_id === c.id);
   return (
-    <li className={`flex gap-3 rounded-lg border p-2 text-sm ${selected ? "border-emerald-500 bg-emerald-50" : rejected ? "border-zinc-200 opacity-50" : "border-zinc-200"}`}>
+    <li className={`flex gap-3 rounded-lg border p-2 text-sm ${selected ? "border-emerald-500 bg-emerald-50" : rejected ? "border-zinc-200 bg-white opacity-50" : "border-zinc-200 bg-white"}`}>
       {c.image ? <img src={c.image} alt="" className="h-16 w-16 flex-none rounded object-cover" /> : <div className="h-16 w-16 flex-none rounded bg-zinc-100" />}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
@@ -69,7 +69,7 @@ function SlotCard({ slot }: { slot: Slot }) {
   const [open, setOpen] = useState(false);
   const sel = slot.candidates.find((c) => c.id === slot.selected);
   return (
-    <section className={`rounded-xl border p-3 ${slot.locked ? "border-indigo-400" : "border-zinc-200"}`}>
+    <section className={`rounded-xl border bg-white p-3 ${slot.locked ? "border-indigo-400" : "border-zinc-200"}`}>
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h3 className="font-semibold">
@@ -108,7 +108,7 @@ export default function Board() {
 
   if (!m) {
     return (
-      <section className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-zinc-500">
+      <section className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-zinc-500">
         <p className="text-lg">No mission yet.</p>
         <p className="mt-2 text-sm">
           Ask your agent: <em>“Outfit me for a 3-day desert backpacking trip, budget $600, I already own a stove.”</em>
@@ -121,8 +121,8 @@ export default function Board() {
   const carts = Object.values(m.carts);
 
   return (
-    <section className="space-y-4">
-      <header className="rounded-xl border border-zinc-200 p-4">
+    <section className="space-y-4 text-zinc-900">
+      <header className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-xl font-semibold">{m.goal}</h2>
           <button className="flex-none rounded border px-2 py-0.5 text-xs text-zinc-600" onClick={() => clearMission()} title="Start a fresh board; this mission stays reachable at ?m=id">
@@ -155,11 +155,11 @@ export default function Board() {
       )}
 
       {carts.length > 0 && (
-        <section className="rounded-xl border border-zinc-200 p-4">
+        <section className="rounded-xl border border-zinc-200 bg-white p-4">
           <h3 className="font-semibold">Checkout — one cart per merchant</h3>
           <ul className="mt-2 grid gap-2 sm:grid-cols-3">
             {carts.map((c) => (
-              <li key={c.merchant_domain} className="rounded-lg border p-3 text-sm">
+              <li key={c.merchant_domain} className="rounded-lg border border-zinc-200 bg-white p-3 text-sm">
                 <div className="font-medium">{c.merchant_domain}</div>
                 <div className="text-xs text-zinc-500">{c.lines.map((l) => l.title).join(", ")}</div>
                 <div className="mt-1 font-semibold">{money(c.total_cents, c.currency)}</div>
