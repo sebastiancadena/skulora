@@ -1,0 +1,12 @@
+[
+  { "domain": "www.allbirds.com", "tags": ["footwear", "apparel"], "probe_query": "lightweight running shoes" },
+  { "domain": "www.aloyoga.com", "tags": ["apparel", "activewear"], "probe_query": "sun hoodie" },
+  { "domain": "www.fellowproducts.com", "tags": ["coffee", "kitchen"], "probe_query": "grinder" },
+  { "domain": "www.cotopaxi.com", "tags": ["outdoor", "packs"], "probe_query": "backpack" },
+  { "domain": "www.kuiu.com", "tags": ["outdoor", "hunting"], "probe_query": "sleeping bag" },
+  { "domain": "www.hydroflask.com", "tags": ["outdoor", "hydration"], "probe_query": "water bottle" },
+  { "domain": "www.ridgemerino.com", "tags": ["apparel", "outdoor"], "probe_query": "merino base layer" },
+  { "domain": "www.bombas.com", "tags": ["apparel"], "probe_query": "hiking socks" },
+  { "domain": "www.brooklinen.com", "tags": ["home"], "probe_query": "sheets" },
+  { "domain": "www.ourplace.com", "tags": ["kitchen"], "probe_query": "pan" }
+]
