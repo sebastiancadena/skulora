@@ -11,7 +11,8 @@
     "dns:vercel": "bash scripts/dns-vercel.sh",
     "harness": "tsx scripts/harness.ts",
     "brand": "tsx scripts/brand.ts",
-    "gallery": "tsx scripts/gallery.ts"
+    "gallery": "tsx scripts/gallery.ts",
+    "g3": "tsx scripts/g3.ts"
   },
   "dependencies": {
     "next": "16.3.3",

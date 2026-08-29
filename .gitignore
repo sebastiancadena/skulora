@@ -46,3 +46,4 @@ next-env.d.ts
 # probe output is regenerated
 /evidence.json
 /harness.json
+/g3.json
