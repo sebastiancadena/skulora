@@ -30,6 +30,16 @@ const UCP_CATALOG_TOOLS = new Set(["search_catalog", "lookup_catalog", "get_prod
 let nextId = 1;
 
 async function rpc(endpoint: string, method: string, params: unknown, signal?: AbortSignal, timeoutMs = 12_000) {
+  try {
+    return await rpcOnce(endpoint, method, params, signal, timeoutMs);
+  } catch (e) {
+    // One retry on transient network failures (DNS/connection resets seen on some merchants); never on HTTP errors.
+    if (e instanceof McpError || signal?.aborted) throw e;
+    return rpcOnce(endpoint, method, params, signal, timeoutMs);
+  }
+}
+
+async function rpcOnce(endpoint: string, method: string, params: unknown, signal?: AbortSignal, timeoutMs = 12_000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   signal?.addEventListener("abort", () => ctrl.abort(), { once: true });

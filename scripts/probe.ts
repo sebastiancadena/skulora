@@ -57,8 +57,9 @@ async function main() {
       row.search_products = r.products.length;
       row.sample = r.products[0] ? { title: r.products[0].title, min: r.products[0].price_range?.min } : null;
       row.ok = (row.tools as string[]).includes("update_cart") && r.products.length > 0;
-      if (withCarts && row.ok && r.products[0]?.variants?.[0]?.id) {
-        const cart = await updateCart(m.domain, [{ product_variant_id: r.products[0].variants[0].id, quantity: 1 }]);
+      const variant = r.products.flatMap((p) => p.variants ?? []).find((v) => v.availability?.available);
+      if (withCarts && row.ok && variant) {
+        const cart = await updateCart(m.domain, [{ product_variant_id: variant.id, quantity: 1 }]);
         const { cartId, checkoutUrl } = extractCart(cart);
         row.cart = { cart_id: cartId ? "present" : "missing", checkout_url: checkoutUrl ? "present" : "missing" };
         withCarts = false; // one real cart is enough evidence
