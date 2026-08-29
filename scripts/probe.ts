@@ -8,6 +8,7 @@
  *   3. (--carts) update_cart on one merchant returns a real cart id + checkout URL.
  *   4. (--burst) per-IP rate limit on BASE (default https://outfitter.skulora.com): 30 invalid POSTs to
  *      /api/missions in a burst must turn into 429 after the configured limit (20/min); nothing is created.
+ *      It spends this machine's own 60 s window — wait a minute before driving the agent from the same IP.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
