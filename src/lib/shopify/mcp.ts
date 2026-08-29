@@ -25,6 +25,8 @@ export class McpError extends Error {
   }
 }
 
+const UCP_CATALOG_TOOLS = new Set(["search_catalog", "lookup_catalog", "get_product"]);
+
 let nextId = 1;
 
 async function rpc(endpoint: string, method: string, params: unknown, signal?: AbortSignal, timeoutMs = 12_000) {
@@ -76,12 +78,9 @@ export async function callTool<T = unknown>(
   opts: { signal?: AbortSignal; agentProfile?: string } = {},
 ): Promise<T> {
   const profile = opts.agentProfile ?? process.env.SHOPIFY_UCP_AGENT_PROFILE ?? DEFAULT_AGENT_PROFILE;
-  const r = await rpc(
-    endpoint,
-    "tools/call",
-    { name, arguments: { meta: { "ucp-agent": { profile } }, ...args } },
-    opts.signal,
-  );
+  // Only the UCP catalog tools accept (and require) the agent-profile meta; cart/policy tools reject it.
+  const meta = UCP_CATALOG_TOOLS.has(name) ? { meta: { "ucp-agent": { profile } } } : {};
+  const r = await rpc(endpoint, "tools/call", { name, arguments: { ...meta, ...args } }, opts.signal);
   return parseCallResult<T>(r);
 }
 
