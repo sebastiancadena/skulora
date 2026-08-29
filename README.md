@@ -6,7 +6,7 @@ Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability 
 
 ## Try it (judges)
 
-1. Open **<https://outfitter.skulora.com**> in **ChatGPT's desktop browser** (GPT-5.6 Sol/Terra) or in **Chrome 149+** with `chrome://flags/#enable-webmcp-testing` enabled. The status chip top-right turns green when tools are registered.
+1. Open **<https://outfitter.skulora.com>** in **ChatGPT's desktop browser** (GPT-5.6 Sol/Terra) or in **Chrome 149+** with `chrome://flags/#enable-webmcp-testing` enabled. The status chip top-right turns green when tools are registered.
 2. Ask the agent: *"Outfit me for a 3-day desert backpacking trip. Budget $600. I already own a stove and a headlamp. I run hot at night."*
 3. Watch the board fill: the agent plans slots, searches real Shopify merchants for each, chooses with a reason, and prepares one real checkout per merchant.
 4. **Lock** an item you want to keep, **reject** one you don't, then tell the agent *"I changed some things — re-plan within budget."* Every tool result carries `mission_delta`, so it sees your edits.
