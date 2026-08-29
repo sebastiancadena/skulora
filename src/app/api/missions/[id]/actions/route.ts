@@ -9,6 +9,7 @@ import { getMission, mutateMission, NotFound } from "@/lib/mission/repo";
 import { planKit } from "@/lib/mission/planner";
 import { searchForSlot } from "@/lib/mission/search";
 import { prepareCheckout } from "@/lib/mission/checkout";
+import { explainableSlots, explainTradeoffs } from "@/lib/mission/tradeoffs";
 import { missionTotals, type Actor, type Mission, type Slot } from "@/lib/mission/types";
 
 type Body = { actor?: Actor; type: string; version?: number; [k: string]: unknown };
@@ -33,6 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     let planned: Awaited<ReturnType<typeof planKit>> | undefined;
     let searched: Awaited<ReturnType<typeof searchForSlot>> | undefined;
     let checkout: Awaited<ReturnType<typeof prepareCheckout>> | undefined;
+    let explained: Awaited<ReturnType<typeof explainTradeoffs>> | undefined;
     if (body.type === "plan") {
       const style = (["minimal", "balanced", "premium"] as const).find((s) => s === body.style) ?? "balanced";
       planned = await planKit(snapshot, style, req.signal);
@@ -47,6 +49,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       });
     } else if (body.type === "prepare_checkout") {
       checkout = await prepareCheckout(snapshot, req.signal);
+    } else if (body.type === "explain") {
+      const slotId = typeof body.slot_id === "string" ? body.slot_id : undefined;
+      explained = await explainTradeoffs(snapshot, explainableSlots(snapshot, slotId), req.signal);
     }
 
     const m = await mutateMission(id, (m) => {
@@ -107,6 +112,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           if (slot.selected === cid) slot.selected = undefined;
           const c = slot.candidates.find((x) => x.id === cid);
           log("rejected", { slot_id: slot.id, candidate_id: cid, title: c?.title, reason: body.reason, stale });
+          break;
+        }
+        case "explain": {
+          // Explanations were computed against the snapshot; keep only those whose selection is unchanged.
+          const kept: string[] = [];
+          for (const [sid, tr] of Object.entries(explained!)) {
+            const slot = m.slots.find((s) => s.id === sid);
+            const snap = snapshot.slots.find((s) => s.id === sid);
+            if (!slot || !snap || slot.selected !== snap.selected) continue;
+            slot.tradeoffs = tr;
+            kept.push(sid);
+          }
+          extra.tradeoffs = Object.fromEntries(kept.map((sid) => [sid, explained![sid]]));
+          log("explain_tradeoffs", { slots: kept });
           break;
         }
         case "prepare_checkout": {

@@ -10,6 +10,7 @@ export interface ToolAnnotations {
   readOnlyHint?: boolean;
   untrustedContentHint?: boolean;
   destructiveHint?: boolean;
+  idempotentHint?: boolean;
 }
 
 export interface ToolExecuteOptions {

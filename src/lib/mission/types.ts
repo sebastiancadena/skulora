@@ -40,6 +40,7 @@ export interface Slot {
   selected?: string; // candidate id
   locked: boolean;
   rejected: { candidate_id: string; reason?: string }[];
+  tradeoffs?: { chosen_because: string; vs_alternatives: { candidate_id: string; tradeoff: string }[]; budget_note: string; at: string }; // from explain_tradeoffs
 }
 
 export interface MerchantCart {

@@ -90,7 +90,23 @@ function SlotCard({ slot }: { slot: Slot }) {
         </div>
       </header>
       {sel ? (
-        <ul className="mt-2"><CandidateCard slot={slot} c={sel} /></ul>
+        <>
+          <ul className="mt-2"><CandidateCard slot={slot} c={sel} /></ul>
+          {slot.tradeoffs && (
+            <div className="mt-2 rounded-lg border border-zinc-100 bg-zinc-50 p-2 text-xs text-zinc-700">
+              <p><span className="font-semibold text-zinc-900">Why this:</span> {slot.tradeoffs.chosen_because}</p>
+              {slot.tradeoffs.vs_alternatives.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-zinc-600">
+                  {slot.tradeoffs.vs_alternatives.map((a) => {
+                    const c = slot.candidates.find((x) => x.id === a.candidate_id);
+                    return <li key={a.candidate_id}><span className="text-zinc-500">vs {c ? c.title.slice(0, 40) : a.candidate_id}:</span> {a.tradeoff}</li>;
+                  })}
+                </ul>
+              )}
+              <p className="mt-1 text-zinc-500">{slot.tradeoffs.budget_note}</p>
+            </div>
+          )}
+        </>
       ) : (
         <p className="mt-2 text-sm text-zinc-500">{slot.candidates.length ? "No selection yet." : "Waiting for search_products…"}</p>
       )}

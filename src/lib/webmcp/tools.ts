@@ -67,7 +67,7 @@ function withDelta(agent: string, body: Record<string, unknown>) {
   cursors.set(agent, last);
   const delta = humanEventsSince(since).map((e) => ({ type: e.type, detail: e.detail }));
   const stage = stageFor(m);
-  const next = stage === "A" ? ["create_mission"] : stage === "B" ? ["plan_kit", "search_products", "choose_candidate"] : ["prepare_checkout", "get_checkout_status"];
+  const next = stage === "A" ? ["create_mission"] : stage === "B" ? ["plan_kit", "search_products", "choose_candidate", "explain_tradeoffs"] : ["prepare_checkout", "get_checkout_status"];
   return { ...body, mission_delta: delta, stage, next_suggested_tools: next };
 }
 
@@ -193,6 +193,28 @@ export const tools: (ToolDefinition & { stage: Stage })[] = [
       try {
         const r = await act("agent", "choose", args as Record<string, unknown>);
         return withDelta(AGENT_DEFAULT, { totals: { selected: money(r.totals.selected_cents), remaining: money(r.totals.remaining_cents ?? undefined), over_budget: r.totals.over_budget, required_unfilled: r.totals.required_unfilled } });
+      } catch (e) {
+        return err(AGENT_DEFAULT, (e as Error).message);
+      }
+    },
+  },
+
+  {
+    stage: "B",
+    name: "explain_tradeoffs",
+    title: "Explain tradeoffs",
+    description:
+      "Explain why the selected item in a slot beats its alternatives, in the person's terms: fit to constraints, what each alternative gives up, and price versus the slot's budget share. Grounded on the board only. Omit slot_id to explain every selected slot (max 6). Writes the explanation onto the board, so call it after choosing and again after the person locks or rejects something.",
+    inputSchema: { type: "object", properties: { slot_id: { type: "string", description: "Slot id; omit for all selected slots" } }, additionalProperties: false },
+    annotations: { idempotentHint: true },
+    execute: async (args) => {
+      try {
+        const r = await act("agent", "explain", args as Record<string, unknown>);
+        const tr = r.tradeoffs as Record<string, { chosen_because: string; vs_alternatives: { candidate_id: string; tradeoff: string }[]; budget_note: string }>;
+        const single = typeof (args as { slot_id?: string }).slot_id === "string";
+        // All-slots mode returns summaries only (the alternatives are on the board); one slot returns the full tradeoffs.
+        const slots = Object.entries(tr).map(([slot_id, t]) => (single ? { slot_id, chosen_because: t.chosen_because, vs_alternatives: t.vs_alternatives, budget_note: t.budget_note } : { slot_id, chosen_because: t.chosen_because, budget_note: t.budget_note }));
+        return withDelta(AGENT_DEFAULT, { slots, shown_on_board: true });
       } catch (e) {
         return err(AGENT_DEFAULT, (e as Error).message);
       }

@@ -7,11 +7,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { planKit } from "../src/lib/mission/planner";
 import { searchForSlot } from "../src/lib/mission/search";
+import { explainableSlots, explainTradeoffs } from "../src/lib/mission/tradeoffs";
 import { missionTotals, type Mission } from "../src/lib/mission/types";
 
 for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+  if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^"(.*)"$/, "$1");
 }
 
 const MISSIONS = [
@@ -50,7 +51,16 @@ async function run(i: number) {
   }
   const t = missionTotals(m);
   console.log(`  total (top pick per slot): $${(t.selected_cents / 100).toFixed(2)} of $${((m.budget_total_cents ?? 0) / 100).toFixed(0)} across ${t.merchants} merchants${t.over_budget ? "  OVER BUDGET" : ""}`);
-  report.push({ mission: m.goal, planMs, slots: slotReports, totals: t });
+  // explain_tradeoffs over every selected slot: must reference only real candidate ids and fit a tool result.
+  const t2 = performance.now();
+  const tr = await explainTradeoffs(m, explainableSlots(m));
+  const explainMs = Math.round(performance.now() - t2);
+  const toolResult = JSON.stringify(Object.entries(tr).map(([slot_id, x]) => ({ slot_id, chosen_because: x.chosen_because, budget_note: x.budget_note }))); // all-slots tool result shape
+  const fullBytes = JSON.stringify(tr).length;
+  const badIds = Object.entries(tr).flatMap(([sid, x]) => x.vs_alternatives.filter((a) => !m.slots.find((s) => s.id === sid)?.candidates.some((c) => c.id === a.candidate_id)).map((a) => a.candidate_id));
+  console.log(`  explain_tradeoffs: ${Object.keys(tr).length}/${Math.min(6, m.slots.filter((s) => s.selected).length)} slots, ${explainMs} ms, ${toolResult.length} bytes (tool result), ${fullBytes} on board${badIds.length ? "  BAD IDS " + badIds.join(",") : ""}`);
+  for (const [sid, x] of Object.entries(tr).slice(0, 2)) console.log(`      · ${sid}: ${x.chosen_because}`);
+  report.push({ mission: m.goal, planMs, slots: slotReports, totals: t, explain: { ms: explainMs, slots: Object.keys(tr).length, bytes: toolResult.length, boardBytes: fullBytes, badIds } });
 }
 
 (async () => {
