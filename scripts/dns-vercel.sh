@@ -33,7 +33,8 @@ upsert() { # type name content
 echo "== $DOMAIN (zone $ZONE)"
 printf 'A     @    76.76.21.21 ........ '; upsert A "$DOMAIN" 76.76.21.21
 printf 'CNAME www  cname.vercel-dns.com  '; upsert CNAME "www.$DOMAIN" cname.vercel-dns.com
+printf 'CNAME outfitter cname.vercel-dns.com '; upsert CNAME "outfitter.$DOMAIN" cname.vercel-dns.com
 echo "== verifying with Vercel"
 vercel domains verify "$DOMAIN" 2>&1 | grep -v "Vercel CLI" | tail -3 || true
 echo "== live check"
-for h in "$DOMAIN" "www.$DOMAIN"; do printf '%-20s %s\n' "$h" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$h/" || echo 'no answer yet')"; done
+for h in "outfitter.$DOMAIN" "$DOMAIN" "www.$DOMAIN"; do printf '%-20s %s\n' "$h" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$h/" || echo 'no answer yet')"; done
