@@ -18,7 +18,7 @@ export async function generateJson<T>(opts: {
   signal?: AbortSignal;
   model?: string;
 }): Promise<T> {
-  const provider = process.env.LLM_PROVIDER ?? "openai";
+  const provider = process.env.LLM_PROVIDER || "openai";
   if (provider !== "openai") throw new LlmError(`LLM_PROVIDER=${provider} not implemented yet`);
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new LlmError("OPENAI_API_KEY missing");
@@ -27,7 +27,7 @@ export async function generateJson<T>(opts: {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({
-      model: opts.model ?? process.env.OPENAI_MODEL ?? DEFAULT_MODEL,
+      model: opts.model || process.env.OPENAI_MODEL || DEFAULT_MODEL,
       input: [
         { role: "system", content: opts.system },
         { role: "user", content: opts.user },
