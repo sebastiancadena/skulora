@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#FBF8F2;--ink:#1C1A17;--muted:#6B645B;--pine:#1F4D3A;--pine-600:#2E6B4E;--ochre:#E2A33B;--line:#E6DFD2}
+  html,body{margin:0;width:2400px;height:1600px;background:var(--paper);font-family:Geist,system-ui,sans-serif;color:var(--ink);overflow:hidden}
+  .contours{position:absolute;inset:0;width:100%;height:100%}
+  .wrap{position:absolute;inset:0;display:grid;grid-template-columns:760px 1fr;align-items:center;gap:120px;padding:0 180px}
+  .mark{width:760px;height:760px;filter:drop-shadow(0 40px 80px rgb(31 77 58 / .25))}
+  h1{margin:0;font-size:236px;font-weight:700;letter-spacing:-9px;line-height:.95}
+  .sub{margin:18px 0 0 8px;font-family:"Geist Mono",monospace;font-size:54px;letter-spacing:.34em;color:var(--muted)}
+  .tag{margin:84px 0 0;font-size:88px;font-weight:600;line-height:1.12;max-width:1200px;letter-spacing:-2px}
+  .tag em{font-style:normal;color:var(--pine-600)}
+  .pills{display:flex;gap:24px;margin-top:72px}
+  .pill{display:inline-flex;align-items:center;gap:18px;border-radius:999px;padding:18px 40px;font-size:40px;font-weight:600;border:4px solid var(--pine);color:var(--pine);background:#fff}
+  .pill.solid{background:var(--pine);color:#fff}
+  .dot{width:22px;height:22px;border-radius:999px;background:var(--ochre)}
+</style></head><body>
+<svg class="contours" viewBox="0 0 2400 1600" fill="none" stroke="#1F4D3A" stroke-opacity=".08" stroke-width="4">
+  <path d="M-50 380 C 300 260, 600 520, 980 420 S 1500 240, 1900 360 S 2300 520, 2450 440"/>
+  <path d="M-50 1260 C 350 1120, 700 1400, 1100 1260 S 1700 1080, 2100 1220 S 2350 1300, 2450 1240"/>
+  <path d="M-50 1420 C 400 1320, 800 1560, 1300 1440 S 1900 1320, 2450 1400"/>
+</svg>
+<div class="wrap">
+  <img class="mark" src="MARK_SRC" alt="">
+  <div>
+    <h1>Skulora</h1>
+    <div class="sub">OUTFITTER</div>
+    <p class="tag">Outfit any mission across <em>every store</em> — you and your agent, one board.</p>
+    <div class="pills"><span class="pill solid"><span class="dot"></span>Built on WebMCP</span><span class="pill">Real Shopify checkouts</span></div>
+  </div>
+</div>
+</body></html>

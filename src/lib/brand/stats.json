@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-29T21:59:36.259Z",
+  "generated_at": "2026-08-29T22:00:30.130Z",
   "source": "harness.json[0] + evidence.json via `pnpm brand`",
   "slots": 8,
   "merchants": 6,
