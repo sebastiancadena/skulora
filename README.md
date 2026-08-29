@@ -1,6 +1,6 @@
-# Skulora
+# Skulora Outfitter
 
-A shared planning board where a person and their agent plan a shopping **mission** together — *"outfit me for a 3-day desert backpacking trip, under $600, I already own a stove"* — across every Shopify merchant, ending in one real checkout link per merchant.
+**Outfit any mission across every store.** A shared planning board where a person and their agent plan a shopping **mission** together — *"outfit me for a 3-day desert backpacking trip, under $600, I already own a stove"* — across every Shopify merchant, ending in one real checkout link per merchant.
 
 Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability the agent uses is a tool this page registers with `document.modelContext.registerTool(...)`.
 
