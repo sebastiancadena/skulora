@@ -17,7 +17,9 @@ export default function AgentPanel() {
   const prevId = useRef<string | undefined>(undefined);
   const bottom = useRef<HTMLDivElement>(null);
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: "nearest" }), [lines]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "nearest" });
+  }, [lines]);
 
   const push = (l: Line) => setLines((ls) => [...ls, l]);
 

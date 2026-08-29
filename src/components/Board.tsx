@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { act, missionTotals, useMission } from "@/lib/mission/store";
+import { act, clearMission, missionTotals, useMission } from "@/lib/mission/store";
 import type { Candidate, Slot } from "@/lib/mission/types";
 
 function money(cents?: number | null, currency = "USD") {
@@ -123,7 +123,12 @@ export default function Board() {
   return (
     <section className="space-y-4">
       <header className="rounded-xl border border-zinc-200 p-4">
-        <h2 className="text-xl font-semibold">{m.goal}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-xl font-semibold">{m.goal}</h2>
+          <button className="flex-none rounded border px-2 py-0.5 text-xs text-zinc-600" onClick={() => clearMission()} title="Start a fresh board; this mission stays reachable at ?m=id">
+            New mission
+          </button>
+        </div>
         <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
           <dt className="text-zinc-500">Budget</dt>
           <dd><BudgetEditor cents={m.budget_total_cents} currency={m.currency} /></dd>

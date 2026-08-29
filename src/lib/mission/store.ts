@@ -78,6 +78,19 @@ export async function createMission(input: { goal: string; budget_total_cents?: 
   return m;
 }
 
+/** Forget the current mission on this browser (the server keeps it; ?m=<id> reopens it). */
+export function clearMission() {
+  mission = null;
+  missionId = null;
+  try {
+    window.localStorage.removeItem(ID_KEY);
+    window.history.replaceState(null, "", window.location.pathname);
+  } catch {
+    /* ignore */
+  }
+  emit();
+}
+
 export type ActionResult = { mission: Mission; totals: ReturnType<typeof missionTotals>; [k: string]: unknown };
 
 /** Perform a mutation. Human actions send the version they saw so stale clicks are flagged. */
