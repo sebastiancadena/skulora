@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { act, clearMission, missionTotals, useMission } from "@/lib/mission/store";
-import type { Candidate, Slot } from "@/lib/mission/types";
+import { describeEvent, type Candidate, type Mission, type Slot } from "@/lib/mission/types";
+import { pendingHumanEdits } from "@/lib/webmcp/tools";
 
 function money(cents?: number | null, currency = "USD") {
   if (cents == null) return "—";
@@ -40,7 +41,8 @@ function BudgetEditor({ cents, currency }: { cents?: number; currency: string })
 
 function CandidateCard({ slot, c }: { slot: Slot; c: Candidate }) {
   const selected = slot.selected === c.id;
-  const rejected = slot.rejected.some((r) => r.candidate_id === c.id);
+  const rejection = slot.rejected.find((r) => r.candidate_id === c.id);
+  const rejected = !!rejection;
   return (
     <li className={`flex gap-3 rounded-lg border p-2 text-sm ${selected ? "border-emerald-500 bg-emerald-50" : rejected ? "border-zinc-200 bg-white opacity-50" : "border-zinc-200 bg-white"}`}>
       {c.image ? <img src={c.image} alt="" className="h-16 w-16 flex-none rounded object-cover" /> : <div className="h-16 w-16 flex-none rounded bg-zinc-100" />}
@@ -52,6 +54,19 @@ function CandidateCard({ slot, c }: { slot: Slot; c: Candidate }) {
         <div className="text-xs text-zinc-500">{c.merchant_name ?? c.merchant_domain}</div>
         {c.why_it_fits.length > 0 && <div className="mt-1 text-xs text-emerald-700">{c.why_it_fits.join(" · ")}</div>}
         {c.caveats.length > 0 && <div className="text-xs text-amber-700">{c.caveats.join(" · ")}</div>}
+        {selected && (
+          <div className="mt-1 text-xs text-zinc-700">
+            {slot.selected_by === "human" ? (
+              <span className="rounded bg-zinc-900 px-1 py-0.5 text-white">You chose this</span>
+            ) : (
+              <>
+                <span className="rounded bg-emerald-600 px-1 py-0.5 text-white">Agent picked this</span>
+                {slot.selected_reason && <span className="ml-1">{slot.selected_reason}</span>}
+              </>
+            )}
+          </div>
+        )}
+        {rejected && <div className="mt-1 text-xs text-red-700">You rejected this{rejection.reason ? ` — ${rejection.reason}` : ""}. The agent will not pick it again.</div>}
         <div className="mt-1 flex gap-1">
           {!selected && !rejected && (
             <button className="rounded border px-1.5 text-xs" onClick={() => void act("human", "choose", { slot_id: slot.id, candidate_id: c.id })}>choose</button>
@@ -80,8 +95,12 @@ function SlotCard({ slot }: { slot: Slot }) {
         <div className="flex items-center gap-2 text-xs">
           {slot.budget_hint_cents != null && <span className="text-zinc-500">≈ {money(slot.budget_hint_cents)}</span>}
           {sel && (
-            <button className={`rounded border px-1.5 ${slot.locked ? "bg-indigo-600 text-white" : ""}`} onClick={() => void act("human", "lock", { slot_id: slot.id, locked: !slot.locked })}>
-              {slot.locked ? "locked" : "lock"}
+            <button
+              className={`rounded border px-1.5 ${slot.locked ? "bg-indigo-600 text-white" : ""}`}
+              title={slot.locked ? "Locked: the agent cannot change this pick. Click to unlock." : "Lock this pick so the agent plans around it"}
+              onClick={() => void act("human", "lock", { slot_id: slot.id, locked: !slot.locked })}
+            >
+              {slot.locked ? "🔒 locked" : "lock"}
             </button>
           )}
           <button className="rounded border px-1.5" onClick={() => setOpen((o) => !o)}>
@@ -89,6 +108,7 @@ function SlotCard({ slot }: { slot: Slot }) {
           </button>
         </div>
       </header>
+      {slot.locked && <p className="mt-1 text-xs text-indigo-700">Locked — the agent keeps this and plans the rest around it.</p>}
       {sel ? (
         <>
           <ul className="mt-2"><CandidateCard slot={slot} c={sel} /></ul>
@@ -108,7 +128,7 @@ function SlotCard({ slot }: { slot: Slot }) {
           )}
         </>
       ) : (
-        <p className="mt-2 text-sm text-zinc-500">{slot.candidates.length ? "No selection yet." : "Waiting for search_products…"}</p>
+        <p className="mt-2 text-sm text-zinc-500">{slot.candidates.length ? (slot.rejected.length ? "Nothing picked — the agent will choose again on its next pass." : "No selection yet.") : "Waiting for the agent to search…"}</p>
       )}
       {open && (
         <ul className="mt-2 space-y-2">
@@ -116,6 +136,24 @@ function SlotCard({ slot }: { slot: Slot }) {
         </ul>
       )}
     </section>
+  );
+}
+
+/** What the person changed since the agent last looked — the same list the next tool result carries as mission_delta. */
+function DeltaStrip({ m }: { m: Mission }) {
+  const pending = pendingHumanEdits();
+  if (pending.length === 0) {
+    const lastHuman = [...m.events].reverse().find((e) => e.actor === "human");
+    if (!lastHuman) return null;
+    return <p className="mt-3 text-xs text-zinc-500">✓ The agent has seen your latest edit ({describeEvent(lastHuman, m)}).</p>;
+  }
+  return (
+    <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+      <p className="font-semibold">
+        {pending.length} edit{pending.length === 1 ? "" : "s"} the agent hasn’t seen yet — sent as <code>mission_delta</code> with its next tool call:
+      </p>
+      <ul className="mt-1 list-disc pl-4">{pending.map((e) => <li key={e.seq}>{describeEvent(e, m)}</li>)}</ul>
+    </div>
   );
 }
 
@@ -162,10 +200,11 @@ export default function Board() {
             <div className="mt-1 h-2 w-full rounded bg-zinc-100"><div className={`h-2 rounded ${t.over_budget ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} /></div>
           </div>
         )}
+        <DeltaStrip m={m} />
       </header>
 
       {m.slots.length === 0 ? (
-        <p className="text-sm text-zinc-500">Slots appear once the agent calls plan_kit.</p>
+        <p className="text-sm text-zinc-500">Slots appear once the agent plans the kit. Then lock what you like, reject what you don’t — the agent re-plans around your edits.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">{m.slots.map((s) => <SlotCard key={s.id} slot={s} />)}</div>
       )}
@@ -192,7 +231,7 @@ export default function Board() {
 
       <details className="text-xs text-zinc-500">
         <summary>Event log ({m.events.length}) · v{m.version}</summary>
-        <ul className="mt-1 font-mono">{m.events.map((e) => <li key={e.seq}>#{e.seq} {e.actor} {e.type} {e.detail ? JSON.stringify(e.detail).slice(0, 120) : ""}</li>)}</ul>
+        <ul className="mt-1 font-mono">{m.events.map((e) => <li key={e.seq}>#{e.seq} {e.actor === "human" ? "you" : "agent"} · {describeEvent(e, m)}</li>)}</ul>
       </details>
     </section>
   );

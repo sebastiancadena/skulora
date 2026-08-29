@@ -7,8 +7,10 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { tools } from "@/lib/webmcp/tools";
+import { currentMission } from "@/lib/mission/store";
+import { describeEvent, type MissionEvent } from "@/lib/mission/types";
 
-type Line = { who: "you" | "agent" | "tool"; text: string };
+type Line = { who: "you" | "agent" | "tool" | "delta"; text: string };
 
 export default function AgentPanel() {
   const [lines, setLines] = useState<Line[]>([]);
@@ -57,6 +59,8 @@ export default function AgentPanel() {
             }
             const err = (output as { error?: string })?.error;
             push({ who: "tool", text: `${err ? "✗" : "✓"} ${call.name} ${((performance.now() - t0) / 1000).toFixed(1)}s${err ? ` — ${err.slice(0, 80)}` : ""}` });
+            const delta = (output as { mission_delta?: Pick<MissionEvent, "type" | "detail">[] })?.mission_delta;
+            if (delta?.length) push({ who: "delta", text: `↩ mission_delta → agent: ${delta.map((e) => describeEvent(e, currentMission())).join("; ")}` });
             return { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(output).slice(0, 6000) };
           }),
         );
@@ -71,13 +75,13 @@ export default function AgentPanel() {
   return (
     <aside className="flex h-[70vh] flex-col rounded-xl border border-zinc-200 bg-white text-zinc-900">
       <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold">
-        Built-in agent <span className="font-normal text-zinc-500">— same tools, no WebMCP browser needed</span>
+        Built-in agent <span className="font-normal text-zinc-500">— same tools as ChatGPT sees; your board edits reach it as <code>mission_delta</code></span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
         {lines.length === 0 && <p className="text-zinc-500">Try: “Outfit me for a 3-day desert backpacking trip, budget $600, I already own a stove. I run hot at night.”</p>}
         {lines.map((l, i) => (
           <div key={i} className={l.who === "you" ? "text-right" : ""}>
-            <span className={`inline-block max-w-[95%] rounded-lg px-2 py-1 ${l.who === "you" ? "bg-zinc-900 text-white" : l.who === "tool" ? "font-mono text-xs text-zinc-500" : "bg-zinc-100"}`}>{l.text}</span>
+            <span className={`inline-block max-w-[95%] rounded-lg px-2 py-1 ${l.who === "you" ? "bg-zinc-900 text-white" : l.who === "tool" ? "font-mono text-xs text-zinc-500" : l.who === "delta" ? "border border-amber-300 bg-amber-50 text-xs text-amber-900" : "bg-zinc-100"}`}>{l.text}</span>
           </div>
         ))}
         {busy && <div className="text-xs text-zinc-400">working…</div>}

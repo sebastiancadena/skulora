@@ -94,7 +94,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const c = slot.candidates.find((x) => x.id === body.candidate_id);
           if (!c) throw new Error(`unknown candidate_id for slot ${slot.id}`);
           if (slot.rejected.some((r) => r.candidate_id === c.id) && actor === "agent") throw new Error(`candidate ${c.id} was rejected by the person`);
+          if (slot.selected !== c.id) slot.tradeoffs = undefined; // explanation belonged to the previous pick
           slot.selected = c.id;
+          slot.selected_by = actor;
+          slot.selected_reason = actor === "agent" && typeof body.reason === "string" ? body.reason : undefined;
           log(actor === "human" ? "human_chose" : "choose_candidate", { slot_id: slot.id, candidate_id: c.id, title: c.title, price_cents: c.price_cents, reason: body.reason, stale });
           break;
         }
@@ -109,7 +112,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const cid = String(body.candidate_id ?? slot.selected ?? "");
           if (!cid) throw new Error("candidate_id required");
           slot.rejected.push({ candidate_id: cid, reason: typeof body.reason === "string" ? body.reason : undefined });
-          if (slot.selected === cid) slot.selected = undefined;
+          if (slot.selected === cid) {
+            slot.selected = undefined;
+            slot.selected_by = undefined;
+            slot.selected_reason = undefined;
+            slot.tradeoffs = undefined;
+          }
           const c = slot.candidates.find((x) => x.id === cid);
           log("rejected", { slot_id: slot.id, candidate_id: cid, title: c?.title, reason: body.reason, stale });
           break;

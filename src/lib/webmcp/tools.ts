@@ -4,13 +4,18 @@
  * (PRD §6). Every result carries `mission_delta`: the person's edits since this agent's last call.
  */
 import type { ToolDefinition } from "./types";
-import { act, createMission, currentMission, humanEventsSince, missionTotals, refresh } from "../mission/store";
+import { act, createMission, currentMission, humanEventsSince, missionTotals, notify, refresh } from "../mission/store";
 import type { Candidate, Mission, Slot } from "../mission/types";
 
 export type Stage = "A" | "B" | "C";
 
 const cursors = new Map<string, number>();
 export const AGENT_DEFAULT = "webmcp";
+
+/** Human edits the agent has not been told about yet (the next tool result will carry them as mission_delta). */
+export function pendingHumanEdits() {
+  return humanEventsSince(cursors.get(AGENT_DEFAULT) ?? 0);
+}
 
 function money(cents: number | undefined, cur = "USD") {
   return cents == null ? null : `${(cents / 100).toFixed(2)} ${cur}`;
@@ -65,6 +70,7 @@ function withDelta(agent: string, body: Record<string, unknown>) {
   const since = cursors.get(agent) ?? 0;
   const last = m?.events.at(-1)?.seq ?? 0;
   cursors.set(agent, last);
+  notify();
   const delta = humanEventsSince(since).map((e) => ({ type: e.type, detail: e.detail }));
   const stage = stageFor(m);
   const next = stage === "A" ? ["create_mission"] : stage === "B" ? ["plan_kit", "search_products", "choose_candidate", "explain_tradeoffs"] : ["prepare_checkout", "get_checkout_status"];

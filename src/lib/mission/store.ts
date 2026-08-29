@@ -16,6 +16,11 @@ function emit() {
   listeners.forEach((fn) => fn());
 }
 
+/** Re-render subscribers without a mission change (e.g. the agent's delta cursor moved). */
+export function notify() {
+  emit();
+}
+
 export function currentMission() {
   return mission;
 }

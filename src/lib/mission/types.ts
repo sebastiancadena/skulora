@@ -38,6 +38,8 @@ export interface Slot {
   tags: string[]; // merchant tags from merchants.json vocabulary
   candidates: Candidate[];
   selected?: string; // candidate id
+  selected_by?: Actor; // who made the current selection
+  selected_reason?: string; // the agent's one-line reason (choose_candidate) — shown on the card
   locked: boolean;
   rejected: { candidate_id: string; reason?: string }[];
   tradeoffs?: { chosen_because: string; vs_alternatives: { candidate_id: string; tradeoff: string }[]; budget_note: string; at: string }; // from explain_tradeoffs
@@ -73,6 +75,29 @@ export type MerchantTag = (typeof MERCHANT_TAGS)[number];
 
 export function newId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** One plain-English line per board event, shared by the board, the agent panel and the event log. */
+export function describeEvent(e: Pick<MissionEvent, "type" | "detail">, m?: Mission | null): string {
+  const d = (e.detail ?? {}) as Record<string, unknown>;
+  const slot = m?.slots.find((s) => s.id === d.slot_id);
+  const need = slot?.need ?? (typeof d.slot_id === "string" ? d.slot_id : "slot");
+  const title = typeof d.title === "string" ? d.title : slot?.candidates.find((c) => c.id === d.candidate_id)?.title;
+  const item = title ? `“${title.length > 44 ? title.slice(0, 44).replace(/\s+\S*$/, "") + "…" : title}”` : "";
+  const reason = typeof d.reason === "string" && d.reason ? ` — ${d.reason}` : "";
+  switch (e.type) {
+    case "locked": return `Locked ${need}${item ? ` on ${item}` : ""}`;
+    case "unlocked": return `Unlocked ${need}`;
+    case "rejected": return `Rejected ${item || "a candidate"} for ${need}${reason}`;
+    case "human_chose": return `Chose ${item} for ${need}`;
+    case "choose_candidate": return `Agent picked ${item} for ${need}${reason}`;
+    case "budget_changed": return `Budget set to ${((d.budget_total_cents as number) / 100).toFixed(0)}`;
+    case "plan_kit": return `Planned ${(d.slots as string[] | undefined)?.length ?? 0} slots`;
+    case "search_products": return `Searched ${need}: ${d.added ?? 0} new candidates`;
+    case "explain_tradeoffs": return `Explained ${(d.slots as string[] | undefined)?.length ?? 0} picks`;
+    case "prepare_checkout": return `Prepared checkout at ${(d.merchants as string[] | undefined)?.length ?? 0} merchants`;
+    default: return e.type;
+  }
 }
 
 export function selectedCandidate(slot: Slot): Candidate | undefined {
