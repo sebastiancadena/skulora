@@ -1,9 +1,10 @@
+import AgentPanel from "@/components/AgentPanel";
 import Board from "@/components/Board";
 import WebMCPTools from "@/components/WebMCPTools";
 
 export default function Home() {
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6">
+    <main className="mx-auto max-w-6xl space-y-6 p-6">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
@@ -13,7 +14,10 @@ export default function Home() {
         </div>
         <WebMCPTools />
       </header>
-      <Board />
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <Board />
+        <AgentPanel />
+      </div>
     </main>
   );
 }
