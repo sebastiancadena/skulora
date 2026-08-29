@@ -1,24 +1,21 @@
 import { ImageResponse } from "next/og";
 import { Mark } from "@/lib/brand/Mark";
 import { brand, PRODUCT_NAME, TAGLINE } from "@/lib/brand/tokens";
-import harness from "../../harness.json";
-import evidence from "../../evidence.json";
+import stats from "@/lib/brand/stats.json";
 
 export const alt = `${PRODUCT_NAME} — ${TAGLINE}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-// Every number on the card comes from the checked-in harness/probe output, never typed.
-const run = harness[0];
-const merchantsOk = evidence.merchants.filter((m) => m.ok).length;
+// Every number on the card comes from stats.json, which `pnpm brand` derives from harness.json + evidence.json.
 const money = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function OpenGraphImage() {
-  const stats = [
-    [`${run.slots.length}`, "slots planned"],
-    [`${run.totals.merchants}`, "merchants, one board"],
-    [`${money(run.totals.selected_cents)} / ${money(run.totals.budget_total_cents)}`, "under budget"],
-    [`${merchantsOk}/${evidence.merchants.length}`, "real checkouts probed"],
+  const tiles = [
+    [`${stats.slots}`, "slots planned"],
+    [`${stats.merchants}`, "merchants, one board"],
+    [`${money(stats.selected_cents)} / ${money(stats.budget_total_cents)}`, "under budget"],
+    [`${stats.merchants_ok}/${stats.merchants_total}`, "real checkouts probed"],
   ];
   return new ImageResponse(
     (
@@ -36,7 +33,7 @@ export default function OpenGraphImage() {
           <div style={{ color: brand.pine, fontWeight: 700, fontSize: 30, marginTop: 8, letterSpacing: 1 }}>BUILT ON WEBMCP</div>
         </div>
         <div style={{ display: "flex", gap: 20 }}>
-          {stats.map(([n, label]) => (
+          {tiles.map(([n, label]) => (
             <div key={label} style={{ display: "flex", flexDirection: "column", flex: 1, padding: "18px 22px", borderRadius: 16, background: "#fff", border: `2px solid ${brand.pine}22` }}>
               <div style={{ fontSize: 34, fontWeight: 700, color: brand.pine }}>{n}</div>
               <div style={{ fontSize: 20, color: brand.inkMuted }}>{label}</div>

@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-08-29T21:59:36.259Z",
+  "source": "harness.json[0] + evidence.json via `pnpm brand`",
+  "slots": 8,
+  "merchants": 6,
+  "selected_cents": 55290,
+  "budget_total_cents": 60000,
+  "merchants_ok": 7,
+  "merchants_total": 7
+}

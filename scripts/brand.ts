@@ -15,6 +15,25 @@ import { brand } from "../src/lib/brand/tokens";
 const BASE = process.env.BASE ?? "http://localhost:3123";
 const svg = (el: React.ReactElement) => `<?xml version="1.0" encoding="UTF-8"?>\n${renderToStaticMarkup(el)}\n`;
 
+// Snapshot the numbers the OG card shows. harness.json / evidence.json are local, untracked outputs,
+// so the committed stats.json is the only copy the production build can read — regenerate, never edit.
+if (existsSync("harness.json") && existsSync("evidence.json")) {
+  const run = JSON.parse(readFileSync("harness.json", "utf8"))[0];
+  const ev = JSON.parse(readFileSync("evidence.json", "utf8"));
+  const stats = {
+    generated_at: new Date().toISOString(),
+    source: "harness.json[0] + evidence.json via `pnpm brand`",
+    slots: run.slots.length,
+    merchants: run.totals.merchants,
+    selected_cents: run.totals.selected_cents,
+    budget_total_cents: run.totals.budget_total_cents,
+    merchants_ok: ev.merchants.filter((m: { ok: boolean }) => m.ok).length,
+    merchants_total: ev.merchants.length,
+  };
+  writeFileSync("src/lib/brand/stats.json", JSON.stringify(stats, null, 2) + "\n");
+  console.log("wrote src/lib/brand/stats.json", stats);
+}
+
 writeFileSync("public/logo.svg", svg(createElement(Mark, { px: 256 })));
 writeFileSync("public/logo-small.svg", svg(createElement(Mark, { px: 64, size: "small" })));
 const lockup = `<?xml version="1.0" encoding="UTF-8"?>
