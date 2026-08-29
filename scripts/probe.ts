@@ -6,6 +6,8 @@
  *   1. Global Catalog MCP answers a cross-merchant search without credentials.
  *   2. Each curated merchant's Storefront MCP lists tools and answers a search.
  *   3. (--carts) update_cart on one merchant returns a real cart id + checkout URL.
+ *   4. (--burst) per-IP rate limit on BASE (default https://outfitter.skulora.com): 30 invalid POSTs to
+ *      /api/missions in a burst must turn into 429 after the configured limit (20/min); nothing is created.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
@@ -20,6 +22,8 @@ import {
 import merchants from "../src/lib/shopify/merchants.json" with { type: "json" };
 
 let withCarts = process.argv.includes("--carts");
+const withBurst = process.argv.includes("--burst");
+const BASE = process.env.BASE ?? "https://outfitter.skulora.com";
 const started = new Date().toISOString();
 const evidence: Record<string, unknown> = { started, global_catalog: {}, merchants: [] as unknown[] };
 
@@ -71,6 +75,20 @@ async function main() {
     row.ms = ms(t0);
     (evidence.merchants as unknown[]).push(row);
     console.log(`${row.ok ? "OK " : "ERR"} ${m.domain.padEnd(28)} ${String(row.ms).padStart(6)} ms  ${row.error ?? `${row.search_products} products, tools=${(row.tools as string[])?.length ?? 0}`}`);
+  }
+
+  if (withBurst) {
+    const t0 = performance.now();
+    const N = 30;
+    const statuses = await Promise.all(
+      Array.from({ length: N }, () => fetch(`${BASE}/api/missions`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).then((r) => r.status)),
+    );
+    const rejected = statuses.filter((s) => s === 429).length;
+    const first429 = statuses.indexOf(429);
+    // Reads must never be limited, even mid-burst.
+    const read = await fetch(`${BASE}/api/missions/m_does_not_exist`).then((r) => r.status);
+    evidence.burst = { base: BASE, endpoint: "/api/missions", requests: N, limit_per_min: 20, rejected_429: rejected, first_429_at: first429 + 1, read_during_burst_status: read, ok: rejected > 0 && rejected >= N - 20 - 1 && read === 404, ms: ms(t0) };
+    console.log(`burst: ${N} POSTs → ${rejected} × 429 (first at #${first429 + 1}), GET during burst → ${read}${(evidence.burst as { ok: boolean }).ok ? "  OK" : "  ERR"}`);
   }
 
   evidence.finished = new Date().toISOString();

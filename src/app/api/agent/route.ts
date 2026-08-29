@@ -6,6 +6,8 @@
  */
 export const maxDuration = 60;
 
+import { rateLimit } from "@/lib/ratelimit";
+
 type ToolSpec = { name: string; description: string; parameters: Record<string, unknown> };
 type Body = {
   input: unknown[]; // Responses API input items: user message or function_call_output items
@@ -23,6 +25,8 @@ const SYSTEM = [
 ].join("\n");
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(req, "agent");
+  if (limited) return limited;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return Response.json({ error: "OPENAI_API_KEY missing" }, { status: 500 });
   const body = (await req.json().catch(() => null)) as Body | null;

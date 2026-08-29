@@ -1,7 +1,10 @@
 import { putMission, repoKind } from "@/lib/mission/repo";
 import { newId, type Mission } from "@/lib/mission/types";
+import { rateLimit } from "@/lib/ratelimit";
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(req, "missions");
+  if (limited) return limited;
   const body = (await req.json().catch(() => ({}))) as Partial<Mission> & { goal?: string };
   if (!body.goal || typeof body.goal !== "string") return Response.json({ error: "goal required" }, { status: 400 });
   const now = new Date().toISOString();

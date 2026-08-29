@@ -69,6 +69,7 @@ Descriptions stay within Chrome's guidance (names ≤ 30 chars, descriptions ≤
 - `src/lib/mission/search.ts` — fan-out over Shopify's **Global Catalog MCP** (`catalog.shopify.com/api/ucp/mcp`) and each merchant's **Storefront MCP** (`{shop}/api/mcp`), dedupe, LLM re-rank with a fit threshold.
 - `src/lib/mission/checkout.ts` — `update_cart` on each merchant's Storefront MCP → cart id + checkout URL. Sold-out variants surface as a merchant error on the card, not a silent failure.
 - `src/app/api/agent/route.ts` + `src/components/AgentPanel.tsx` — the built-in agent (function calling over the same table), for browsers without WebMCP.
+- `src/lib/ratelimit.ts` — per-IP limits on the endpoints that spend money or write (LLM steps, mission actions, new missions); reads are never limited. Keeps the site free and open through the judging window.
 
 ### Real merchants, public APIs
 
@@ -80,8 +81,9 @@ Product search and carts use Shopify's public, unauthenticated Storefront MCP an
 pnpm install
 cp .env.example .env.local   # add an LLM key (OpenAI or Anthropic)
 pnpm dev                     # missions are in-memory unless KV_REST_API_URL is set
-pnpm probe --carts           # merchant + Global Catalog checks → evidence.json
+pnpm probe --carts --burst   # merchant + Global Catalog checks, one real cart, rate-limit burst → evidence.json
 pnpm harness                 # six canned missions end to end → harness.json
+pnpm g3                      # 3 consecutive co-driving runs on production, checkout links opened in Chrome → g3.json
 pnpm gallery                 # regenerates docs/gallery from the live site
 ```
 

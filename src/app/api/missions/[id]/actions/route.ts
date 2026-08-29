@@ -6,6 +6,7 @@
 export const maxDuration = 60; // plan + fan-out search can exceed the 10 s default
 
 import { getMission, mutateMission, NotFound } from "@/lib/mission/repo";
+import { rateLimit } from "@/lib/ratelimit";
 import { planKit } from "@/lib/mission/planner";
 import { searchForSlot } from "@/lib/mission/search";
 import { prepareCheckout } from "@/lib/mission/checkout";
@@ -21,6 +22,8 @@ function findSlot(m: Mission, id: unknown): Slot {
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = await rateLimit(req, "actions");
+  if (limited) return limited;
   const { id } = await params;
   const body = (await req.json().catch(() => null)) as Body | null;
   if (!body?.type) return Response.json({ error: "type required" }, { status: 400 });
