@@ -5,6 +5,9 @@
  *  - Storefront MCP:      https://{merchant}/api/mcp                (per-store detail + carts)
  *
  * Both are unauthenticated (verified 2026-08-29). Every request carries a UCP agent profile.
+ * The Catalog endpoint fetches the profile URL live on every call; we self-host a copy of Shopify's example
+ * profile at /ucp/agent-profile.json (public/ucp/) and point SHOPIFY_UCP_AGENT_PROFILE at it so the demo
+ * does not depend on shopify.dev keeping the example URL alive.
  * Runs on the server only — never call merchants from the browser.
  */
 
