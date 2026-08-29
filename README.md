@@ -1,34 +1,91 @@
 # Skulora Outfitter
 
-**Outfit any mission across every store.** A shared planning board where a person and their agent plan a shopping **mission** together — *"outfit me for a 3-day desert backpacking trip, under $600, I already own a stove"* — across every Shopify merchant, ending in one real checkout link per merchant.
+**Outfit any mission across every store.**
 
-Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability the agent uses is a tool this page registers with `document.modelContext.registerTool(...)`.
+A shared planning board where a person and their agent plan a shopping **mission** together — *"outfit me for a 3-day desert backpacking trip, under $600, I already own a stove"* — across real Shopify merchants, ending in one real checkout link per merchant.
 
-## Try it (judges)
+Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability the agent uses is a tool this page registers with `document.modelContext.registerTool(...)`. The human works on the same board in the same browser; every edit reaches the agent as `mission_delta` in its next tool result.
 
-1. Open **<https://outfitter.skulora.com>** in **ChatGPT's desktop browser** (GPT-5.6 Sol/Terra) or in **Chrome 149+** with `chrome://flags/#enable-webmcp-testing` enabled. The status chip top-right turns green when tools are registered.
+**Live:** <https://outfitter.skulora.com> · MIT licensed
+
+[![Skulora — the board after a full mission](docs/gallery/01-thumbnail.png)](https://outfitter.skulora.com)
+
+## Try it (judges) — 5 steps, ~3 minutes
+
+1. Open **<https://outfitter.skulora.com>** in **ChatGPT's desktop browser** (GPT-5.6 Sol/Terra) or in **Chrome 149+** with `chrome://flags/#enable-webmcp-testing` enabled. The pill top-right turns green: *WebMCP: registered*.
 2. Ask the agent: *"Outfit me for a 3-day desert backpacking trip. Budget $600. I already own a stove and a headlamp. I run hot at night."*
-3. Watch the board fill: the agent plans slots, searches real Shopify merchants for each, chooses with a reason, and prepares one real checkout per merchant.
-4. **Lock** an item you want to keep, **reject** one you don't, then tell the agent *"I changed some things — re-plan within budget."* Every tool result carries `mission_delta`, so it sees your edits.
-5. Chrome: DevTools → Application → **WebMCP** shows the tools (they appear in stages as the mission advances) and the invocation log.
+3. Watch the board fill. The agent creates the mission, **discovers the next-stage tools** (`plan_kit`, `search_products`, …) as they appear, plans the slots, searches merchants in parallel, and picks each item with a reason you can read on the card.
+4. **Lock** one pick you want to keep, **reject** one you don't, then say *"I changed some things — re-plan within budget."* The agent reads your edits from `mission_delta` and replaces only what you rejected.
+5. Ask for checkout. `prepare_checkout` creates one real cart per merchant and puts a **Checkout** link on the board. Chrome: DevTools → Application → **WebMCP** shows the tools and the invocation log.
 
-No login. Carts are created on real merchants but nothing is purchased; you complete checkout yourself. Any browser without WebMCP can use the built-in agent panel — same tools.
+No login. Carts are created on real merchants but nothing is purchased — checkout is always your step. Any browser without WebMCP can use the **built-in agent** panel on the page; it drives the identical tool table.
+
+## What a run looks like
+
+Numbers below come from `harness.json` (`pnpm harness`, mission #1) and `evidence.json` (`pnpm probe --carts`), never typed by hand.
+
+- Plan: **8 slots** in 5.9 s. Search: 2.1–3.1 s per slot, 4 candidates each, sourced from Shopify's Global Catalog plus tagged merchants.
+- Kit: **$552.90 of a $600 budget across 6 merchants** (Kaviso, Naturehike, Uloha, Campmor, Garage Grown Gear, Cotopaxi), no required slot unfilled.
+- `explain_tradeoffs` for all slots: 892 bytes, so it fits an agent's context budget.
+- Merchant probe: **7/7** Storefront MCP endpoints reachable, Global Catalog OK, real cart + checkout URL created on Allbirds.
+
+| The kit, planned by the agent | Lock + reject on the board |
+|---|---|
+| ![board with a full kit](docs/gallery/03-board-kit.png) | ![lock and reject controls](docs/gallery/04-board-codriving.png) |
+
+| Re-plan: the agent sees `mission_delta` | One real checkout per merchant |
+|---|---|
+| ![re-plan after human edits](docs/gallery/05-replan.png) | ![checkout cards](docs/gallery/06-checkout.png) |
+
+## How it works
+
+![architecture](docs/gallery/02-architecture.png)
+
+```text
+mission → slots → candidates → your locks → one checkout per merchant
+```
+
+### WebMCP surface
+
+`src/lib/webmcp/tools.ts` is the single tool table; `src/components/WebMCPTools.tsx` registers it with `document.modelContext.registerTool(...)` (with `AbortController` cleanup). Tools are disclosed in **stages** as the mission advances, so the agent sees a small, relevant set at every step and re-discovers via `toolchange`:
+
+| Stage | Tools | Notes |
+|---|---|---|
+| A — no mission yet | `get_mission`, `create_mission`, `set_budget` | `get_mission` is `readOnlyHint` |
+| B — mission exists | `plan_kit`, `search_products`, `choose_candidate`, `explain_tradeoffs` | `search_products` carries `untrustedContentHint` (merchant content); `explain_tradeoffs` is `idempotentHint` |
+| C — every required slot filled | `prepare_checkout`, `get_checkout_status` | one real cart per merchant |
+
+Every result ends with three fields the agent can act on:
+
+- `mission_delta` — the person's edits since *this agent's* last call (locks, rejects, manual choices, budget changes). `choose_candidate` fails on a locked slot or a rejected candidate, so the agent has to read it.
+- `stage` and `next_suggested_tools` — what to do next.
+
+Descriptions stay within Chrome's guidance (names ≤ 30 chars, descriptions ≤ 500, results ≈ ≤ 1.5 KB).
+
+### Behind the tools
+
+- `src/app/api/missions/**` — server-side missions in Upstash Redis with compare-and-set writes, because agents call `search_products` for every slot in parallel. Slow work (LLM, merchant search) runs outside the mutation.
+- `src/lib/mission/planner.ts` — mission → slots, strict-schema structured output.
+- `src/lib/mission/search.ts` — fan-out over Shopify's **Global Catalog MCP** (`catalog.shopify.com/api/ucp/mcp`) and each merchant's **Storefront MCP** (`{shop}/api/mcp`), dedupe, LLM re-rank with a fit threshold.
+- `src/lib/mission/checkout.ts` — `update_cart` on each merchant's Storefront MCP → cart id + checkout URL. Sold-out variants surface as a merchant error on the card, not a silent failure.
+- `src/app/api/agent/route.ts` + `src/components/AgentPanel.tsx` — the built-in agent (function calling over the same table), for browsers without WebMCP.
+
+### Real merchants, public APIs
+
+Product search and carts use Shopify's public, unauthenticated Storefront MCP and Global Catalog MCP endpoints, which merchants expose for agents. The agent profile the Catalog requires is self-hosted at `/ucp/agent-profile.json`. Carts are ordinary abandoned carts with no personal data; the app never completes a purchase.
 
 ## Develop
 
 ```bash
 pnpm install
-cp .env.example .env.local   # add an LLM key
-pnpm dev
-pnpm probe --carts           # re-runs the merchant/Global Catalog checks → evidence.json
+cp .env.example .env.local   # add an LLM key (OpenAI or Anthropic)
+pnpm dev                     # missions are in-memory unless KV_REST_API_URL is set
+pnpm probe --carts           # merchant + Global Catalog checks → evidence.json
+pnpm harness                 # six canned missions end to end → harness.json
+pnpm gallery                 # regenerates docs/gallery from the live site
 ```
 
-## How WebMCP is used
-
-- `src/lib/webmcp/tools.ts` — the tool table (one source of truth for the browser surface and the built-in agent): Stage A `get_mission`, `create_mission`, `set_budget`; Stage B `plan_kit`, `search_products`, `choose_candidate`; Stage C `prepare_checkout`, `get_checkout_status`. Read-only tools carry `readOnlyHint`; merchant-content tools carry `untrustedContentHint`. Every result ends with `mission_delta` (the person's edits since that agent's last call) and `next_suggested_tools`.
-- `src/components/WebMCPTools.tsx` — `document.modelContext.registerTool(...)` with `AbortController` cleanup, re-registered per stage so agents see new tools via `toolchange`.
-- `src/app/api/missions/**` — server-side missions (Upstash Redis, compare-and-set writes because agents call tools in parallel); `src/lib/mission/{planner,search,checkout}.ts` — planning, cross-merchant search over Shopify's Global Catalog MCP + Storefront MCP with LLM re-ranking, and real carts.
-- `src/app/api/agent/route.ts` + `src/components/AgentPanel.tsx` — the built-in agent, driving the identical tools for browsers without WebMCP.
+Chrome without ChatGPT: enable the flag, open the page, and run tools by hand from DevTools → Application → WebMCP, or ask the built-in agent panel.
 
 ## License
 
