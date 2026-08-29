@@ -1,67 +1,22 @@
 /**
- * Client-side mission state (Day-0 placeholder; moves server-side with SSE on Day 2).
- * Human edits and agent tool calls both go through `update()`, and every change is appended to
- * `events` so that tool results can report a `mission_delta` — what the human changed since the
- * agent's last call.
+ * Browser-side mission client. The server owns the mission; this module keeps the current mission
+ * id (localStorage), a cached copy, and a 2 s poll while the tab is visible so human edits and
+ * agent tool calls converge on one board. Both the board UI and the WebMCP tools go through `act()`.
  */
 import { useSyncExternalStore } from "react";
+import { missionTotals, type Actor, type Mission, type MissionEvent } from "./types";
 
-export type MissionEvent = { seq: number; at: string; actor: "human" | "agent"; type: string; detail?: unknown };
-
-export interface Mission {
-  id: string;
-  goal: string;
-  budget_total_cents?: number;
-  currency: string;
-  owned_items: string[];
-  constraints: string[];
-  slots: Slot[];
-  events: MissionEvent[];
-}
-
-export interface Slot {
-  id: string;
-  need: string;
-  constraints: string[];
-  candidates: unknown[];
-  selected?: string;
-  locked?: boolean;
-  rejected: string[];
-}
-
-const KEY = "skulora.mission.v1";
+const ID_KEY = "skulora.missionId";
 let mission: Mission | null = null;
+let missionId: string | null = null;
 const listeners = new Set<() => void>();
-let seq = 0;
-let hydrated = false;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-/** Load the last mission from localStorage (client only). Idempotent. */
-export function hydrate() {
-  if (hydrated || typeof window === "undefined") return;
-  hydrated = true;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (raw) {
-      mission = JSON.parse(raw) as Mission;
-      seq = mission.events.at(-1)?.seq ?? 0;
-    }
-  } catch {
-    /* corrupt or unavailable storage: start empty */
-  }
+function emit() {
+  listeners.forEach((fn) => fn());
 }
 
-function persist() {
-  try {
-    if (typeof window === "undefined") return;
-    if (mission) window.localStorage.setItem(KEY, JSON.stringify(mission));
-    else window.localStorage.removeItem(KEY);
-  } catch {
-    /* storage unavailable */
-  }
-}
-
-export function getMission() {
-  hydrate();
+export function currentMission() {
   return mission;
 }
 
@@ -70,24 +25,76 @@ export function subscribe(fn: () => void) {
   return () => listeners.delete(fn);
 }
 
-export function update(actor: MissionEvent["actor"], type: string, mutate: (m: Mission | null) => Mission | null, detail?: unknown) {
-  hydrate();
-  mission = mutate(mission);
-  if (mission) mission.events.push({ seq: ++seq, at: new Date().toISOString(), actor, type, detail });
-  persist();
-  listeners.forEach((fn) => fn());
+export function useMission() {
+  return useSyncExternalStore(subscribe, currentMission, () => null);
+}
+
+export function boot() {
+  if (typeof window === "undefined" || pollTimer) return;
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("m");
+    missionId = fromUrl ?? window.localStorage.getItem(ID_KEY);
+    if (fromUrl) window.localStorage.setItem(ID_KEY, fromUrl);
+  } catch {
+    /* storage unavailable */
+  }
+  void refresh();
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === "visible" && missionId) void refresh();
+  }, 2000);
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" });
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  return data;
+}
+
+export async function refresh() {
+  if (!missionId) return null;
+  try {
+    const { mission: m } = await api<{ mission: Mission }>(`/api/missions/${missionId}`);
+    if (!mission || m.version !== mission.version) {
+      mission = m;
+      emit();
+    }
+  } catch {
+    /* transient; next poll retries */
+  }
   return mission;
 }
 
-/** Events after `sinceSeq` that were made by the human — the agent's view of what changed. */
-export function delta(sinceSeq: number) {
+export async function createMission(input: { goal: string; budget_total_cents?: number; currency?: string; owned_items?: string[]; constraints?: string[] }) {
+  const { mission: m } = await api<{ mission: Mission }>("/api/missions", { method: "POST", body: JSON.stringify(input) });
+  mission = m;
+  missionId = m.id;
+  try {
+    window.localStorage.setItem(ID_KEY, m.id);
+  } catch {
+    /* ignore */
+  }
+  emit();
+  return m;
+}
+
+export type ActionResult = { mission: Mission; totals: ReturnType<typeof missionTotals>; [k: string]: unknown };
+
+/** Perform a mutation. Human actions send the version they saw so stale clicks are flagged. */
+export async function act(actor: Actor, type: string, fields: Record<string, unknown> = {}): Promise<ActionResult> {
+  if (!missionId) throw new Error("no mission yet — call create_mission first");
+  const r = await api<ActionResult>(`/api/missions/${missionId}/actions`, {
+    method: "POST",
+    body: JSON.stringify({ actor, type, version: actor === "human" ? mission?.version : undefined, ...fields }),
+  });
+  mission = r.mission;
+  emit();
+  return r;
+}
+
+/** Human events after `sinceSeq` — what the agent has not yet seen. */
+export function humanEventsSince(sinceSeq: number): MissionEvent[] {
   return (mission?.events ?? []).filter((e) => e.seq > sinceSeq && e.actor === "human");
 }
 
-export function useMission() {
-  return useSyncExternalStore(subscribe, getMission, () => null);
-}
-
-export function newId(prefix: string) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
-}
+export { missionTotals };

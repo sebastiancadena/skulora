@@ -100,6 +100,7 @@ export type UcpMoney = { amount: number; currency: string }; // amount in minor 
 export type UcpVariant = {
   id: string;
   title?: string;
+  url?: string; // Global Catalog puts the merchant product URL here
   price?: UcpMoney;
   availability?: { available: boolean };
   options?: { name: string; label: string }[];
