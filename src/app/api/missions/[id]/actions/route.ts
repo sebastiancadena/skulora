@@ -3,6 +3,8 @@
  * Body: { actor, type, version?, ...fields }. Human actions may carry the version they were taken
  * against; a stale version is still applied but flagged so the agent's next mission_delta explains it.
  */
+export const maxDuration = 60; // plan + fan-out search can exceed the 10 s default
+
 import { mutateMission, NotFound } from "@/lib/mission/repo";
 import { planKit } from "@/lib/mission/planner";
 import { searchForSlot } from "@/lib/mission/search";
