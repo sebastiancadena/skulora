@@ -2,14 +2,36 @@
 
 /**
  * Built-in agent: a fallback for browsers without WebMCP and the narrator for the demo video.
- * It drives the exact same tool table the page registers with document.modelContext — the tool
- * calls are executed here in the page, so the board reacts identically to ChatGPT or Gemini.
+ * It drives the exact same tool table the page registers with document.modelContext — each call
+ * goes through the browser's executeTool when the page has registered the tool there (so Chrome's
+ * DevTools logs it), else runs here in the page; the board reacts identically to ChatGPT or Gemini.
  */
 import { useEffect, useRef, useState } from "react";
 import { tools } from "@/lib/webmcp/tools";
+import { getModelContext } from "@/lib/webmcp/types";
 import { currentMission } from "@/lib/mission/store";
 import { describeEvent, type MissionEvent } from "@/lib/mission/types";
 
+/**
+ * Run a tool the way an external agent would: through the browser's model context when this
+ * page has registered it there (Chrome then logs the call in DevTools → Application → WebMCP,
+ * with input and output), and directly otherwise (no WebMCP surface, or a tool of a later stage
+ * the page has not disclosed yet — the built-in agent sees every stage; the server enforces the guards).
+ */
+async function invoke(tool: (typeof tools)[number], args: Record<string, unknown>): Promise<unknown> {
+  const mc = getModelContext();
+  if (mc?.executeTool && mc.getTools) {
+    const registered = (await mc.getTools()).find((t) => t.name === tool.name);
+    if (registered) {
+      const out = await mc.executeTool(registered, JSON.stringify(args));
+      if (typeof out === "string") {
+        try { return JSON.parse(out); } catch { return out; }
+      }
+      return out;
+    }
+  }
+  return tool.execute(args);
+}
 type Line = { who: "you" | "agent" | "tool" | "delta"; text: string };
 
 export default function AgentPanel() {
@@ -53,7 +75,7 @@ export default function AgentPanel() {
             let output: unknown;
             try {
               const args = call.arguments ? JSON.parse(call.arguments) : {};
-              output = tool ? await tool.execute(args) : { error: `unknown tool ${call.name}` };
+              output = tool ? await invoke(tool, args) : { error: `unknown tool ${call.name}` };
             } catch (e) {
               output = { error: String((e as Error).message) };
             }
