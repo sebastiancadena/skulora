@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { tools } from "@/lib/webmcp/tools";
 import { getModelContext } from "@/lib/webmcp/types";
-import { currentMission } from "@/lib/mission/store";
+import { currentMission, useMission } from "@/lib/mission/store";
 import { describeEvent, type MissionEvent } from "@/lib/mission/types";
 
 /**
@@ -38,8 +38,20 @@ export default function AgentPanel() {
   const [lines, setLines] = useState<Line[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const prevId = useRef<string | undefined>(undefined);
+  // The OpenAI conversation thread, tagged with the mission it is about.
+  const prevId = useRef<{ for: string | null; id?: string }>({ for: null });
   const bottom = useRef<HTMLDivElement>(null);
+  // The conversation belongs to one mission. "New mission" (board → null) or opening another
+  // ?m=<id> while idle starts a fresh transcript; send() then drops the thread too, so the agent
+  // does not carry the old board in its memory. The null → id step of create_mission happens
+  // while busy and is the same conversation, so it is not a reset. (State adjusted during
+  // render, the React-sanctioned form; an effect would flash the old lines first.)
+  const missionId = useMission()?.id ?? null;
+  const [convoFor, setConvoFor] = useState<string | null>(missionId);
+  if (convoFor !== missionId && (missionId === null || !busy)) {
+    setConvoFor(missionId);
+    if (convoFor !== null || missionId === null) setLines([]);
+  }
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "nearest" });
@@ -53,17 +65,18 @@ export default function AgentPanel() {
     setInput("");
     push({ who: "you", text });
     let input: unknown[] = [{ role: "user", content: text }];
+    if (prevId.current.for !== convoFor) prevId.current = { for: convoFor };
     try {
       for (let step = 0; step < 24; step++) {
         const active = tools; // the built-in agent sees every stage; the server enforces the guards
         const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ input, previous_response_id: prevId.current, tools: active.map((t) => ({ name: t.name, description: t.description, parameters: t.inputSchema })) }),
+          body: JSON.stringify({ input, previous_response_id: prevId.current.id, tools: active.map((t) => ({ name: t.name, description: t.description, parameters: t.inputSchema })) }),
         });
         const data = (await res.json()) as { response_id?: string; text?: string; calls?: { call_id: string; name: string; arguments: string }[]; error?: string };
         if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
-        prevId.current = data.response_id;
+        prevId.current = { for: currentMission()?.id ?? convoFor, id: data.response_id };
         if (data.text) push({ who: "agent", text: data.text });
         if (!data.calls?.length) break;
         // Execute every requested tool call concurrently (the server serializes writes with compare-and-set).
