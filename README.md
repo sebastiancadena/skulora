@@ -6,7 +6,7 @@ A shared planning board where a person and their agent plan a shopping **mission
 
 Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability the agent uses is a tool this page registers with `document.modelContext.registerTool(...)`. The human works on the same board in the same browser; every edit reaches the agent as `mission_delta` in its next tool result.
 
-**Live:** <https://outfitter.skulora.com> · **Video (2:56):** <https://youtu.be/4AR3BDc3URw> · MIT licensed
+**Live:** <https://outfitter.skulora.com> · **Video (2:55):** <https://youtu.be/La2AGaUZurA> · MIT licensed
 
 [![Skulora — the board after a full mission](docs/gallery/01-thumbnail.png)](https://outfitter.skulora.com)
 
