@@ -58,9 +58,21 @@ mission → slots → candidates → your locks → one checkout per merchant
 Every result ends with three fields the agent can act on:
 
 - `mission_delta` — the person's edits since *this agent's* last call (locks, rejects, manual choices, budget changes). `choose_candidate` fails on a locked slot or a rejected candidate, so the agent has to read it.
-- `stage` and `next_suggested_tools` — what to do next.
+- `stage` and `next_suggested_tools` — what to do next, computed from the board's actual state.
 
 Descriptions stay within Chrome's guidance (names ≤ 30 chars, descriptions ≤ 500, results ≈ ≤ 1.5 KB).
+
+### Guardrails for careless agents
+
+Agents call tools out of order, in parallel, with stale ids, and while the person is editing. The board is built to stay coherent anyway; `pnpm misuse` drives every case below through `document.modelContext.executeTool` in headless Chrome (36 checks):
+
+- Every mutation is validated on the server; an error names the valid slot or candidate ids and the tool to call next, so the agent recovers on its next turn.
+- `create_mission` on a board that already has picks is refused unless `replace: true`; the error points to `set_budget` and `plan_kit` for adjustments.
+- Re-planning keeps every slot the person locked **or chose in**, and tells the planner those needs are covered.
+- Carts are derived state: any change to a pick clears them (`checkout_reset` on the event log), so a stale checkout never sits under a new pick. `prepare_checkout` is refused while a required slot is empty, naming the slot.
+- Tool stages only ever advance within a mission. Un-registering tools under an in-flight call made Chrome report a call as failed after it ran.
+- `merchant_domain` is checked against the curated merchants and sellers already on the board before the server contacts any host.
+- Parallel tool results are adopted by version, so a late, older reply cannot blank candidates the board already shows.
 
 ### Behind the tools
 
@@ -84,6 +96,7 @@ pnpm dev                     # missions are in-memory unless KV_REST_API_URL is 
 pnpm probe --carts --burst   # merchant + Global Catalog checks, one real cart, rate-limit burst → evidence.json
 pnpm harness                 # six canned missions end to end → harness.json
 pnpm g3                      # 3 consecutive co-driving runs on production, checkout links opened in Chrome → g3.json
+pnpm misuse                  # drives the tools out of order in flagged headless Chrome against a local dev server (36 checks)
 pnpm gallery                 # regenerates docs/gallery from the live site
 ```
 
