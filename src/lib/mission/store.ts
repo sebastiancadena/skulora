@@ -49,23 +49,46 @@ export function boot() {
   }, 2000);
 }
 
+class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" });
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw new ApiError(data.error ?? `HTTP ${res.status}`, res.status);
   return data;
+}
+
+/**
+ * Take a server copy into the cache. Agents fire tool calls in parallel and the responses land in
+ * any order, so a reply carrying an older version than the one already cached is ignored — it
+ * would blank candidates the board is already showing until the next poll put them back.
+ */
+function adopt(m: Mission) {
+  if (mission && mission.id === m.id && m.version <= mission.version) return;
+  mission = m;
+  emit();
+}
+
+/** The server no longer has this mission (expired, or a dev server restarted): forget it so the board and the tools agree. */
+function forgetIfGone(e: unknown) {
+  if (e instanceof ApiError && e.status === 404) {
+    clearMission();
+    return true;
+  }
+  return false;
 }
 
 export async function refresh() {
   if (!missionId) return null;
   try {
     const { mission: m } = await api<{ mission: Mission }>(`/api/missions/${missionId}`);
-    if (!mission || m.version !== mission.version) {
-      mission = m;
-      emit();
-    }
-  } catch {
-    /* transient; next poll retries */
+    adopt(m);
+  } catch (e) {
+    forgetIfGone(e); /* otherwise transient; next poll retries */
   }
   return mission;
 }
@@ -100,15 +123,22 @@ export type ActionResult = { mission: Mission; totals: ReturnType<typeof mission
 
 /** Perform a mutation. Human actions send the version they saw so stale clicks are flagged. */
 export async function act(actor: Actor, type: string, fields: Record<string, unknown> = {}): Promise<ActionResult> {
-  if (!missionId) throw new Error("no mission yet — call create_mission first");
-  const r = await api<ActionResult>(`/api/missions/${missionId}/actions`, {
-    method: "POST",
-    body: JSON.stringify({ actor, type, version: actor === "human" ? mission?.version : undefined, ...fields }),
-  });
-  mission = r.mission;
-  emit();
+  if (!missionId) throw new Error(NO_MISSION);
+  let r: ActionResult;
+  try {
+    r = await api<ActionResult>(`/api/missions/${missionId}/actions`, {
+      method: "POST",
+      body: JSON.stringify({ actor, type, version: actor === "human" ? mission?.version : undefined, ...fields }),
+    });
+  } catch (e) {
+    if (forgetIfGone(e)) throw new Error(`${(e as Error).message}; the board was cleared — call create_mission to start a new one`);
+    throw e;
+  }
+  adopt(r.mission);
   return r;
 }
+
+const NO_MISSION = "no mission yet — call create_mission first";
 
 /** Human events after `sinceSeq` — what the agent has not yet seen. */
 export function humanEventsSince(sinceSeq: number): MissionEvent[] {

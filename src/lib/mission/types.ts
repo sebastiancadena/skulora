@@ -92,10 +92,14 @@ export function describeEvent(e: Pick<MissionEvent, "type" | "detail">, m?: Miss
     case "human_chose": return `Chose ${item} for ${need}`;
     case "choose_candidate": return `Agent picked ${item} for ${need}${reason}`;
     case "budget_changed": return `Budget set to ${((d.budget_total_cents as number) / 100).toFixed(0)}`;
-    case "plan_kit": return `Planned ${(d.slots as string[] | undefined)?.length ?? 0} slots`;
+    case "plan_kit": {
+      const kept = (d.kept as string[] | undefined)?.length ?? 0;
+      return `Planned ${(d.slots as string[] | undefined)?.length ?? 0} slots${kept ? ` (kept ${kept} of yours)` : ""}`;
+    }
     case "search_products": return `Searched ${need}: ${d.added ?? 0} new candidates`;
     case "explain_tradeoffs": return `Explained ${(d.slots as string[] | undefined)?.length ?? 0} picks`;
     case "prepare_checkout": return `Prepared checkout at ${(d.merchants as string[] | undefined)?.length ?? 0} merchants`;
+    case "checkout_reset": return "Checkout cleared — the kit changed; prepare it again when the picks are final";
     default: return e.type;
   }
 }

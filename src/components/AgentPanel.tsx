@@ -43,8 +43,9 @@ export default function AgentPanel() {
   const bottom = useRef<HTMLDivElement>(null);
   // The conversation belongs to one mission. "New mission" (board → null) or opening another
   // ?m=<id> while idle starts a fresh transcript; send() then drops the thread too, so the agent
-  // does not carry the old board in its memory. The null → id step of create_mission happens
-  // while busy and is the same conversation, so it is not a reset. (State adjusted during
+  // does not carry the old board in its memory. A mission id that changes while busy is this
+  // agent's own create_mission (first mission, or a replace the person asked for) — the same
+  // conversation, so send() adopts the id and the transcript stays. (State adjusted during
   // render, the React-sanctioned form; an effect would flash the old lines first.)
   const missionId = useMission()?.id ?? null;
   const [convoFor, setConvoFor] = useState<string | null>(missionId);
@@ -65,7 +66,8 @@ export default function AgentPanel() {
     setInput("");
     push({ who: "you", text });
     let input: unknown[] = [{ role: "user", content: text }];
-    if (prevId.current.for !== convoFor) prevId.current = { for: convoFor };
+    let convo = convoFor;
+    if (prevId.current.for !== convo) prevId.current = { for: convo };
     try {
       for (let step = 0; step < 24; step++) {
         // The server builds the model's tool list from the same specs this page registers; it does
@@ -77,7 +79,12 @@ export default function AgentPanel() {
         });
         const data = (await res.json()) as { response_id?: string; text?: string; calls?: { call_id: string; name: string; arguments: string }[]; error?: string };
         if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
-        prevId.current = { for: currentMission()?.id ?? convoFor, id: data.response_id };
+        const nowId = currentMission()?.id ?? null;
+        if (nowId !== null && nowId !== convo) {
+          convo = nowId;
+          setConvoFor(nowId);
+        }
+        prevId.current = { for: convo, id: data.response_id };
         if (data.text) push({ who: "agent", text: data.text });
         if (!data.calls?.length) break;
         // Execute every requested tool call concurrently (the server serializes writes with compare-and-set).

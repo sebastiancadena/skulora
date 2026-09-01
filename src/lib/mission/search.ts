@@ -47,7 +47,32 @@ function normalize(p: UcpProduct, source: Candidate["source"], fallbackDomain?: 
 
 export type SearchOptions = { query?: string; price_max_cents?: number; merchant_domain?: string; limit?: number; signal?: AbortSignal };
 
+/** Normalize a merchant domain as an agent might spell it (scheme, path, case) to the bare host. */
+export function normalizeDomain(d: string) {
+  return d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+}
+
+/**
+ * Merchants the server may call for a mission: the curated list plus any seller that already has
+ * a candidate on the board (the Global Catalog surfaces sellers beyond the curated list). Anything
+ * else is refused before a request leaves the server — `merchant_domain` is agent input, and
+ * `https://{domain}/api/mcp` must not become a way to make this server POST to arbitrary hosts.
+ */
+export function allowedMerchants(m: Mission): Set<string> {
+  const out = new Set((merchants as Merchant[]).map((mm) => normalizeDomain(mm.domain)));
+  for (const s of m.slots) for (const c of s.candidates) out.add(normalizeDomain(c.merchant_domain));
+  return out;
+}
+
 export async function searchForSlot(m: Mission, slot: Slot, opts: SearchOptions = {}): Promise<{ candidates: Candidate[]; sources: string[]; errors: string[] }> {
+  if (opts.merchant_domain !== undefined) {
+    const d = normalizeDomain(opts.merchant_domain);
+    if (!allowedMerchants(m).has(d)) {
+      const known = (merchants as Merchant[]).map((mm) => mm.domain).join(", ");
+      throw new Error(`merchant_domain ${opts.merchant_domain} is not a merchant this board can search; omit it, or use one of: ${known}, or a merchant already on the board`);
+    }
+    opts = { ...opts, merchant_domain: d };
+  }
   const query = opts.query ?? slot.search_query;
   const priceMax = opts.price_max_cents ?? (slot.budget_hint_cents ? Math.round(slot.budget_hint_cents * 1.6) : m.budget_total_cents);
   const filters = { price: priceMax ? { max: priceMax } : undefined, available: true };

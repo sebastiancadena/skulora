@@ -12,7 +12,8 @@
     "harness": "tsx scripts/harness.ts",
     "brand": "tsx scripts/brand.ts",
     "gallery": "tsx scripts/gallery.ts",
-    "g3": "tsx scripts/g3.ts"
+    "g3": "tsx scripts/g3.ts",
+    "misuse": "tsx scripts/misuse.ts"
   },
   "dependencies": {
     "next": "16.3.3",

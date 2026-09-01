@@ -15,6 +15,11 @@ import { missionTotals, type Actor, type Mission, type Slot } from "@/lib/missio
 
 type Body = { actor?: Actor; type: string; version?: number; [k: string]: unknown };
 
+/** Slots a re-plan must not touch: locked by the person, or holding the person's own pick. */
+function keptOnReplan(s: Slot) {
+  return s.locked || (!!s.selected && s.selected_by === "human");
+}
+
 function findSlot(m: Mission, id: unknown): Slot {
   const s = m.slots.find((x) => x.id === id);
   if (!s) throw new Error(`unknown slot_id ${String(id)}; slots: ${m.slots.map((x) => x.id).join(", ")}`);
@@ -48,7 +53,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     let explained: Awaited<ReturnType<typeof explainTradeoffs>> | undefined;
     if (body.type === "plan") {
       const style = (["minimal", "balanced", "premium"] as const).find((s) => s === body.style) ?? "balanced";
-      planned = await planKit(snapshot, style, req.signal);
+      // A re-plan keeps what the person locked and what the person chose (an unlocked pick is still
+      // theirs); the planner is told those needs are covered so it does not plan them twice.
+      planned = await planKit(snapshot, style, req.signal, snapshot.slots.filter(keptOnReplan).map((s) => s.need));
       extra.style = style;
     } else if (body.type === "search") {
       searched = await searchForSlot(snapshot, findSlot(snapshot, body.slot_id), {
@@ -59,6 +66,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         signal: req.signal,
       });
     } else if (body.type === "prepare_checkout") {
+      const unfilled = missionTotals(snapshot).required_unfilled;
+      if (unfilled.length) throw new Error(`required slots have no selection yet: ${unfilled.join(", ")}; search_products and choose_candidate for them first`);
       checkout = await prepareCheckout(snapshot, req.signal);
     } else if (body.type === "explain") {
       const slotId = typeof body.slot_id === "string" ? body.slot_id : undefined;
@@ -69,6 +78,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const log = (type: string, detail?: unknown) =>
         m.events.push({ seq: (m.events.at(-1)?.seq ?? 0) + 1, at: new Date().toISOString(), actor, type, detail });
       const stale = typeof body.version === "number" && body.version !== m.version;
+      // Carts were built from the selections at prepare_checkout time; once the kit changes they no
+      // longer describe it, so they leave the board rather than sit under a different pick.
+      const resetCarts = () => {
+        if (Object.keys(m.carts).length === 0) return;
+        m.carts = {};
+        log("checkout_reset");
+      };
 
       switch (body.type) {
         case "set_budget": {
@@ -80,10 +96,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
         case "plan": {
           const { notes, slots } = planned!;
-          const locked = m.slots.filter((s) => s.locked);
-          m.slots = [...locked, ...slots.filter((s) => !locked.some((l) => l.id === s.id))];
+          const kept = m.slots.filter(keptOnReplan);
+          m.slots = [...kept, ...slots.filter((s) => !kept.some((k) => k.id === s.id))];
+          resetCarts();
           extra.notes = notes;
-          log("plan_kit", { style: extra.style, slots: m.slots.map((s) => s.id) });
+          extra.kept = kept.map((s) => s.id);
+          log("plan_kit", { style: extra.style, slots: m.slots.map((s) => s.id), kept: extra.kept });
           break;
         }
         case "search": {
@@ -105,7 +123,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const c = slot.candidates.find((x) => x.id === body.candidate_id);
           if (!c) throw new Error(`unknown candidate_id for slot ${slot.id}`);
           if (slot.rejected.some((r) => r.candidate_id === c.id) && actor === "agent") throw new Error(`candidate ${c.id} was rejected by the person`);
-          if (slot.selected !== c.id) slot.tradeoffs = undefined; // explanation belonged to the previous pick
+          if (slot.selected !== c.id) {
+            slot.tradeoffs = undefined; // explanation belonged to the previous pick
+            resetCarts();
+          }
           slot.selected = c.id;
           slot.selected_by = actor;
           slot.selected_reason = actor === "agent" && typeof body.reason === "string" ? body.reason : undefined;
@@ -128,6 +149,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             slot.selected_by = undefined;
             slot.selected_reason = undefined;
             slot.tradeoffs = undefined;
+            resetCarts();
           }
           const c = slot.candidates.find((x) => x.id === cid);
           log("rejected", { slot_id: slot.id, candidate_id: cid, title: c?.title, reason: body.reason, stale });

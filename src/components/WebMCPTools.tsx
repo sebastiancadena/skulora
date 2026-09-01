@@ -28,7 +28,8 @@ export default function WebMCPTools() {
   // call in flight — create_mission is the one that advances the stage — keeps its registration
   // and its result. Re-registering everything on each change aborted the executing tool and
   // Chrome rejected the call as "failed for an unknown transient reason" although the tool had
-  // run. Only a stage going backwards (New mission) unregisters, and no call is in flight then.
+  // run. Within one mission the stage never goes back (see stageFor), so the only unregistration
+  // is the board going empty (New mission) or switching to another mission.
   const registered = useRef(new Map<string, AbortController>());
 
   useEffect(() => {

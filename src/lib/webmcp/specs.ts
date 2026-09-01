@@ -33,11 +33,13 @@ export const specs: ToolSpec[] = [
     stage: "A",
     name: "create_mission",
     title: "Create mission",
-    description: "Start a shopping mission from the person's goal, e.g. 'outfit me for a 3-day desert backpacking trip'. Replaces the current mission on this board. Then call plan_kit.",
+    description:
+      "Start a shopping mission from the person's goal, e.g. 'outfit me for a 3-day desert backpacking trip'. Then call plan_kit. Fails if a mission with picks is already on the board unless replace is true; to adjust the current mission use set_budget or plan_kit instead.",
     inputSchema: {
       type: "object",
       properties: {
         goal: { type: "string", description: "The mission in the person's words" },
+        replace: { type: "boolean", description: "Discard the mission in progress and start over (only when the person asked for a new mission)" },
         budget_total_cents: { type: "integer", description: "Total budget across all merchants, in cents" },
         currency: { type: "string", description: "ISO 4217, default USD" },
         owned_items: { type: "array", items: { type: "string" }, description: "Gear the person already has; never shopped for" },
@@ -61,7 +63,7 @@ export const specs: ToolSpec[] = [
     name: "plan_kit",
     title: "Plan kit",
     description:
-      "Break the mission into product slots (e.g. backpack, sleeping bag) with constraints, a budget share and a search query each, respecting owned items and the total budget. Locked slots are kept. Then call search_products per slot.",
+      "Break the mission into product slots (e.g. backpack, sleeping bag) with constraints, a budget share and a search query each, respecting owned items and the total budget. Re-planning keeps slots the person locked or chose in, and clears any prepared checkout. Then call search_products per slot.",
     inputSchema: { type: "object", properties: { style: { type: "string", enum: ["minimal", "balanced", "premium"] } }, additionalProperties: false },
   },
   {
@@ -113,7 +115,7 @@ export const specs: ToolSpec[] = [
     name: "prepare_checkout",
     title: "Prepare checkout",
     description:
-      "Create one real cart per merchant from the selected candidates and show the person a checkout card per merchant on the board. Does not purchase anything — the person completes each checkout. Call once the kit is final and within budget.",
+      "Create one real cart per merchant from the selected candidates and show the person a checkout card per merchant on the board. Does not purchase anything — the person completes each checkout. Fails while a required slot has no selection; carts are cleared again whenever a pick changes. Call once the kit is final and within budget.",
     inputSchema: noArgs,
   },
   {

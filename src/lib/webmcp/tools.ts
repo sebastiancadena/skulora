@@ -11,12 +11,14 @@ import { act, createMission, currentMission, humanEventsSince, missionTotals, no
 import type { Candidate, Mission, Slot } from "../mission/types";
 
 export type { Stage };
+/** Last event seq the agent was told about, per mission: a cursor from one board must not hide or replay another board's edits. */
 const cursors = new Map<string, number>();
 export const AGENT_DEFAULT = "webmcp";
 
 /** Human edits the agent has not been told about yet (the next tool result will carry them as mission_delta). */
 export function pendingHumanEdits() {
-  return humanEventsSince(cursors.get(AGENT_DEFAULT) ?? 0);
+  const id = currentMission()?.id;
+  return id ? humanEventsSince(cursors.get(id) ?? 0) : [];
 }
 
 function money(cents: number | undefined, cur = "USD") {
@@ -61,26 +63,47 @@ function compact(m: Mission | null) {
   };
 }
 
+const ORDER: Stage[] = ["A", "B", "C"];
+/** Highest stage each mission has reached. */
+const reached = new Map<string, Stage>();
+
+/**
+ * Disclosure stage. It advances as the mission does and, within one mission, never goes back: a
+ * person rejecting the pick in a required slot at Stage C must not unregister the checkout tools
+ * under a call in flight (Chrome then fails the call although it ran) or churn `toolchange`. The
+ * server refuses prepare_checkout while a required slot is empty, so keeping the tools is safe.
+ */
 export function stageFor(m: Mission | null): Stage {
   if (!m) return "A";
   const t = missionTotals(m);
-  return m.slots.length > 0 && t.required_unfilled.length === 0 ? "C" : "B";
+  const now: Stage = m.slots.length > 0 && t.required_unfilled.length === 0 ? "C" : "B";
+  const best = reached.get(m.id);
+  const stage = best && ORDER.indexOf(best) > ORDER.indexOf(now) ? best : now;
+  reached.set(m.id, stage);
+  return stage;
 }
 
-function withDelta(agent: string, body: Record<string, unknown>) {
+function withDelta(_agent: string, body: Record<string, unknown>) {
   const m = currentMission();
-  const since = cursors.get(agent) ?? 0;
-  const last = m?.events.at(-1)?.seq ?? 0;
-  cursors.set(agent, last);
+  const since = m ? (cursors.get(m.id) ?? 0) : 0;
+  if (m) cursors.set(m.id, m.events.at(-1)?.seq ?? 0);
   notify();
-  const delta = humanEventsSince(since).map((e) => ({ type: e.type, detail: e.detail }));
+  const delta = m ? humanEventsSince(since).map((e) => ({ type: e.type, detail: e.detail })) : [];
   const stage = stageFor(m);
-  const next = stage === "A" ? ["create_mission"] : stage === "B" ? ["plan_kit", "search_products", "choose_candidate", "explain_tradeoffs"] : ["prepare_checkout", "get_checkout_status"];
+  // What to do next follows the board's actual state, not the disclosure stage: at Stage C with a
+  // required slot emptied again, the way forward is choose_candidate, not prepare_checkout.
+  const ready = !!m && m.slots.length > 0 && missionTotals(m).required_unfilled.length === 0;
+  const next = !m ? ["create_mission"] : ready ? ["prepare_checkout", "get_checkout_status"] : ["plan_kit", "search_products", "choose_candidate", "explain_tradeoffs"];
   return { ...body, mission_delta: delta, stage, next_suggested_tools: next };
 }
 
 function err(agent: string, message: string) {
   return withDelta(agent, { error: message });
+}
+
+/** A board with picks on it is work the person may be relying on; replacing it needs an explicit `replace: true`. */
+function inProgress(m: Mission | null) {
+  return !!m && m.slots.some((s) => s.selected || s.locked);
 }
 /** What each tool does when called in the page. Keyed by the names in `specs`. */
 const executors: Record<string, ToolDefinition["execute"]> = {
@@ -89,9 +112,18 @@ const executors: Record<string, ToolDefinition["execute"]> = {
     return withDelta(AGENT_DEFAULT, { mission: compact(currentMission()) });
   },
   create_mission: async (args) => {
-    const m = await createMission(args as { goal: string });
-    cursors.set(AGENT_DEFAULT, m.events.at(-1)?.seq ?? 0);
-    return withDelta(AGENT_DEFAULT, { mission: compact(m) });
+    const { replace, ...input } = args as { goal: string; replace?: boolean };
+    const cur = currentMission();
+    if (inProgress(cur) && replace !== true) {
+      const picks = cur!.slots.filter((s) => s.selected).length;
+      return err(AGENT_DEFAULT, `a mission is already in progress on this board ("${cur!.goal}", ${picks} pick${picks === 1 ? "" : "s"}). Use set_budget to change the budget or plan_kit to re-plan it; to start over and discard it, call create_mission again with replace: true`);
+    }
+    try {
+      const m = await createMission(input);
+      return withDelta(AGENT_DEFAULT, { mission: compact(m), replaced: cur ? cur.id : null });
+    } catch (e) {
+      return err(AGENT_DEFAULT, (e as Error).message);
+    }
   },
   set_budget: async (args) => {
     try {
@@ -104,7 +136,7 @@ const executors: Record<string, ToolDefinition["execute"]> = {
   plan_kit: async (args) => {
     try {
       const r = await act("agent", "plan", args as Record<string, unknown>);
-      return withDelta(AGENT_DEFAULT, { notes: r.notes, slots: r.mission.slots.map(compactSlot) });
+      return withDelta(AGENT_DEFAULT, { notes: r.notes, kept_slots: r.kept ?? [], slots: r.mission.slots.map(compactSlot) });
     } catch (e) {
       return err(AGENT_DEFAULT, (e as Error).message);
     }
