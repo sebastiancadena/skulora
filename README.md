@@ -20,14 +20,22 @@ Built for [The WebMCP Challenge](https://webmcp.devpost.com/). Every capability 
 
 No login. Carts are created on real merchants but nothing is purchased — checkout is always your step. Any browser without WebMCP can use the **built-in agent** panel on the page; it drives the identical tool table.
 
+## Why WebMCP for this
+
+- **Fit.** A mission is structured state with a small set of operations: plan, search, choose, explain, prepare. Exposing it as typed tools lets any agent finish the job faster and more reliably than guessing through a UI, while the page decides what an agent may do.
+- **Better experience.** One sentence — *"outfit me for a 3-day desert trip, $600, I own a stove"* — becomes a 9-slot kit searched across every merchant and chosen with reasons in 27 seconds (`g3.json`), instead of eight store searches, a spreadsheet for the budget and a dozen tabs. The person never re-explains: locks and rejections reach the agent as data.
+- **Together.** The agent does the breadth (every merchant, every slot); the person does the judgment (this one, not that one, this much). Lock a pack, reject a tent, say "re-plan": the agent keeps the pack, replaces only the tent and says why.
+- **How.** Nine typed tools registered with `document.modelContext.registerTool(...)`, disclosed in three stages via `toolchange`, annotated (`readOnlyHint`, `untrustedContentHint`), results sized for an agent's context, `mission_delta` and `next_suggested_tools` in every result, and every rule enforced on the server with errors that name the valid ids and the next tool. Details below.
+
 ## What a run looks like
 
-Numbers below come from `harness.json` (`pnpm harness`, mission #1) and `evidence.json` (`pnpm probe --carts`), never typed by hand.
+Numbers below come from `harness.json` (`pnpm harness`, mission #1), `evidence.json` (`pnpm probe --carts`) and `g3.json` (`pnpm g3`), never typed by hand.
 
 - Plan: **8 slots** in 5.9 s. Search: 2.1–3.1 s per slot, 4 candidates each, sourced from Shopify's Global Catalog plus tagged merchants.
 - Kit: **$552.90 of a $600 budget across 6 merchants** (Kaviso, Naturehike, Uloha, Campmor, Garage Grown Gear, Cotopaxi), no required slot unfilled.
 - `explain_tradeoffs` for all slots: 892 bytes, so it fits an agent's context budget.
 - Merchant probe: **7/7** Storefront MCP endpoints reachable, Global Catalog OK, real cart + checkout URL created on Allbirds.
+- Co-driving run on production (`g3.json`): **9/9 slots filled in 27 s**; after a lock and a reject, the locked pick kept, the rejected pick replaced, every other slot untouched; 9 carts created, 8 checkout links live.
 
 | The kit, planned by the agent | Lock + reject on the board |
 |---|---|
