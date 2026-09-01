@@ -121,7 +121,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const slot = findSlot(m, body.slot_id);
           if (slot.locked && actor === "agent") throw new Error(`slot ${slot.id} is locked by the person; ask before changing it`);
           const c = slot.candidates.find((x) => x.id === body.candidate_id);
-          if (!c) throw new Error(`unknown candidate_id for slot ${slot.id}`);
+          if (!c) throw new Error(slot.candidates.length ? `unknown candidate_id for slot ${slot.id}; candidates: ${slot.candidates.map((x) => x.id).join(", ")}` : `slot ${slot.id} has no candidates yet; call search_products for it first`);
           if (slot.rejected.some((r) => r.candidate_id === c.id) && actor === "agent") throw new Error(`candidate ${c.id} was rejected by the person`);
           if (slot.selected !== c.id) {
             slot.tradeoffs = undefined; // explanation belonged to the previous pick
