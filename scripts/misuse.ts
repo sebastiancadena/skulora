@@ -66,9 +66,12 @@ const registeredNames = (page: Page) => page.evaluate(async () => ((await (docum
   const pcEarly = await tool(page, "prepare_checkout", {});
   ok("S3 prepare_checkout before Stage C is not registered or errors", pcEarly.__unregistered || !!pcEarly.error, JSON.stringify(pcEarly).slice(0, 160));
 
-  // S4: arbitrary merchant_domain (SSRF-ish) — expect a refusal, not a fetch to the host
-  const ssrf = await tool(page, "search_products", { slot_id: slotIds[0], merchant_domain: "example.com/../../x" });
-  ok("S4 arbitrary merchant_domain refused", !!ssrf.error && /merchant/i.test(ssrf.error) && !(ssrf.errors ?? []).some((e: string) => /HTTP|fetch/.test(e)), JSON.stringify(ssrf).slice(0, 200));
+  // S4: arbitrary merchant_domain (SSRF-ish) — the host is never contacted; the call still searches normally and says why
+  const ssrf = await tool(page, "search_products", { slot_id: slotIds[0], merchant_domain: "example.com/../../x", limit: 2 });
+  ok("S4 arbitrary merchant_domain ignored, not fetched, search still runs", !ssrf.error && (ssrf.errors ?? []).some((e: string) => /merchant_domain .* ignored/.test(e)) && !(ssrf.errors ?? []).some((e: string) => /HTTP 405|example\.com\/api/.test(e)) && ssrf.sources?.includes("global"), JSON.stringify(ssrf).slice(0, 220));
+  // S4b: the model fills every optional field — "" and 0 must behave like "unset", not "search for nothing"
+  const filled = await tool(page, "search_products", { slot_id: slotIds[1], query: "", merchant_domain: "", price_max_cents: 0, limit: 0 });
+  ok("S4 empty-string / zero optionals behave as unset", !filled.error && (filled.candidates?.length ?? 0) > 0 && !(filled.errors ?? []).length, JSON.stringify(filled).slice(0, 200));
 
   // S5: two parallel searches on the same slot + one on another slot (out-of-order responses)
   const [r1, r2, r3] = await Promise.all([

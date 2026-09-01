@@ -65,14 +65,24 @@ export function allowedMerchants(m: Mission): Set<string> {
 }
 
 export async function searchForSlot(m: Mission, slot: Slot, opts: SearchOptions = {}): Promise<{ candidates: Candidate[]; sources: string[]; errors: string[] }> {
-  if (opts.merchant_domain !== undefined) {
-    const d = normalizeDomain(opts.merchant_domain);
-    if (!allowedMerchants(m).has(d)) {
+  // Agents fill every optional field: "" for a string they have no value for, 0 for a number.
+  // Those mean "unset", never "search for nothing" or "return nothing".
+  const str = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+  const pos = (v?: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined);
+  const errors: string[] = [];
+  let merchantDomain = str(opts.merchant_domain);
+  if (merchantDomain !== undefined) {
+    const d = normalizeDomain(merchantDomain);
+    if (allowedMerchants(m).has(d)) merchantDomain = d;
+    else {
+      // Never contact an unlisted host; fall back to the normal search and say so, rather than
+      // failing the call and costing the agent a round trip.
       const known = (merchants as Merchant[]).map((mm) => mm.domain).join(", ");
-      throw new Error(`merchant_domain ${opts.merchant_domain} is not a merchant this board can search; omit it, or use one of: ${known}, or a merchant already on the board`);
+      errors.push(`merchant_domain ${merchantDomain} ignored: not a merchant this board can search (use one of ${known}, or a merchant already on the board); searched all merchants instead`);
+      merchantDomain = undefined;
     }
-    opts = { ...opts, merchant_domain: d };
   }
+  opts = { ...opts, merchant_domain: merchantDomain, query: str(opts.query), price_max_cents: pos(opts.price_max_cents), limit: pos(opts.limit) };
   const query = opts.query ?? slot.search_query;
   const priceMax = opts.price_max_cents ?? (slot.budget_hint_cents ? Math.round(slot.budget_hint_cents * 1.6) : m.budget_total_cents);
   const filters = { price: priceMax ? { max: priceMax } : undefined, available: true };
@@ -90,7 +100,6 @@ export async function searchForSlot(m: Mission, slot: Slot, opts: SearchOptions 
   const raw: Candidate[] = [];
   const texts = new Map<string, string>(); // product_id → description, for re-ranking only (kept out of Candidate for size)
   const sources: string[] = [];
-  const errors: string[] = [];
   for (const s of settled) {
     if (s.status === "rejected") {
       errors.push(String(s.reason?.message ?? s.reason).slice(0, 120));
