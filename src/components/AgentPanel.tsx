@@ -68,11 +68,12 @@ export default function AgentPanel() {
     if (prevId.current.for !== convoFor) prevId.current = { for: convoFor };
     try {
       for (let step = 0; step < 24; step++) {
-        const active = tools; // the built-in agent sees every stage; the server enforces the guards
+        // The server builds the model's tool list from the same specs this page registers; it does
+        // not take one from here, so /api/agent cannot be driven with tools of someone's choosing.
         const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ input, previous_response_id: prevId.current.id, tools: active.map((t) => ({ name: t.name, description: t.description, parameters: t.inputSchema })) }),
+          body: JSON.stringify({ input, previous_response_id: prevId.current.id }),
         });
         const data = (await res.json()) as { response_id?: string; text?: string; calls?: { call_id: string; name: string; arguments: string }[]; error?: string };
         if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
