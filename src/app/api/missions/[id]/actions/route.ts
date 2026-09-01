@@ -6,7 +6,7 @@
 export const maxDuration = 60; // plan + fan-out search can exceed the 10 s default
 
 import { getMission, mutateMission, NotFound } from "@/lib/mission/repo";
-import { rateLimit } from "@/lib/ratelimit";
+import { dailyBudget, rateLimit } from "@/lib/ratelimit";
 import { planKit } from "@/lib/mission/planner";
 import { searchForSlot } from "@/lib/mission/search";
 import { prepareCheckout } from "@/lib/mission/checkout";
@@ -27,6 +27,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const body = (await req.json().catch(() => null)) as Body | null;
   if (!body?.type) return Response.json({ error: "type required" }, { status: 400 });
+  // plan, search and explain call the model on our key whoever is driving the board — ChatGPT
+  // included — so they carry a daily ceiling. The rest (locking, rejecting, choosing, budget,
+  // checkout) cost us no tokens and must never be refused for budget: a person editing their own
+  // board is not what runs up a bill.
+  if (body.type === "plan" || body.type === "search" || body.type === "explain") {
+    const spent = await dailyBudget(req, "actions");
+    if (spent) return spent;
+  }
   const actor: Actor = body.actor === "human" ? "human" : "agent";
   const extra: Record<string, unknown> = {};
 

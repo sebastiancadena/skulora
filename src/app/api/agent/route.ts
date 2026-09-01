@@ -10,7 +10,7 @@
  */
 export const maxDuration = 60;
 
-import { globalBudget, rateLimit } from "@/lib/ratelimit";
+import { dailyBudget, rateLimit } from "@/lib/ratelimit";
 import { specs } from "@/lib/webmcp/specs";
 
 type Body = {
@@ -64,7 +64,7 @@ function validInput(input: unknown[]): string | null {
 }
 
 export async function POST(req: Request) {
-  const limited = (await rateLimit(req, "agent")) ?? (await globalBudget("agent"));
+  const limited = (await rateLimit(req, "agent")) ?? (await dailyBudget(req, "agent"));
   if (limited) return limited;
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return Response.json({ error: "OPENAI_API_KEY missing" }, { status: 500 });
