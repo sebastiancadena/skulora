@@ -63,10 +63,10 @@ mission → slots → candidates → your locks → one checkout per merchant
 | B: mission exists | `plan_kit`, `search_products`, `choose_candidate`, `explain_tradeoffs` | `search_products` carries `untrustedContentHint` (merchant content); `explain_tradeoffs` is `idempotentHint` |
 | C: every required slot filled | `prepare_checkout`, `get_checkout_status` | one real cart per merchant |
 
-Every result ends with three fields the agent can act on:
+Every result ends with fields the agent can act on:
 
 - `mission_delta`: the person's edits since *this agent's* last call (locks, rejects, manual choices, budget changes). `choose_candidate` fails on a locked slot or a rejected candidate, so the agent has to read it.
-- `stage` and `next_suggested_tools`: what to do next, computed from the board's actual state.
+- `stage`, `next_suggested_tools` and `next`: what to do next, computed from the board's actual state; `next` names the slots that still need a search or a choice.
 
 Descriptions stay within Chrome's guidance (names ≤ 30 chars, descriptions ≤ 500, results ≈ ≤ 1.5 KB).
 

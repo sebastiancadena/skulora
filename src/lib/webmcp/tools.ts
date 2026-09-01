@@ -94,7 +94,28 @@ function withDelta(_agent: string, body: Record<string, unknown>) {
   // required slot emptied again, the way forward is choose_candidate, not prepare_checkout.
   const ready = !!m && m.slots.length > 0 && missionTotals(m).required_unfilled.length === 0;
   const next = !m ? ["create_mission"] : ready ? ["prepare_checkout", "get_checkout_status"] : ["plan_kit", "search_products", "choose_candidate", "explain_tradeoffs"];
-  return { ...body, mission_delta: delta, stage, next_suggested_tools: next };
+  return { ...body, mission_delta: delta, stage, next_suggested_tools: next, next: nextStep(m) };
+}
+
+/**
+ * The next step in words, naming the slots it applies to. An agent that stops after a failed or
+ * empty search tends to treat the situation as "nothing to do"; a sentence that says which slots
+ * still need a search or a choice keeps it on the process without any prompt of its own.
+ */
+function nextStep(m: Mission | null): string {
+  if (!m) return "create_mission with the person's goal, budget, owned items and constraints";
+  if (m.slots.length === 0) return "plan_kit to break the mission into slots";
+  const unfilled = m.slots.filter((s) => s.required && !s.selected);
+  if (unfilled.length > 0) {
+    const toSearch = unfilled.filter((s) => s.candidates.length === 0).map((s) => s.id);
+    const toChoose = unfilled.filter((s) => s.candidates.length > 0).map((s) => s.id);
+    const parts: string[] = [];
+    if (toSearch.length) parts.push(`search_products for ${toSearch.join(", ")} (retry with another query or merchant if a search returns nothing)`);
+    if (toChoose.length) parts.push(`choose_candidate for ${toChoose.join(", ")} (candidates are already on the board)`);
+    return `${parts.join("; ")}; then explain_tradeoffs and prepare_checkout`;
+  }
+  if (Object.keys(m.carts).length === 0) return "every required slot is selected: explain_tradeoffs if not done, then prepare_checkout";
+  return "carts are ready: get_checkout_status, then hand the person the checkout links";
 }
 
 function err(agent: string, message: string) {
