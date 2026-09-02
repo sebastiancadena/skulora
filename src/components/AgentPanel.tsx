@@ -34,6 +34,12 @@ async function invoke(tool: (typeof tools)[number], args: Record<string, unknown
 }
 type Line = { who: "you" | "agent" | "tool" | "delta"; text: string };
 
+// Model steps per send(). A serial run over nine slots is about 23 steps (plan, nine searches, nine
+// choices, explain, checkout), so the old cap of 24 ended a run with a single retry, and did so in
+// silence. Reaching this one prints a line; "continue" resumes the same thread.
+const MAX_STEPS = 40;
+const newRunId = () => (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2)).replace(/-/g, "").slice(0, 8);
+
 export default function AgentPanel() {
   const [lines, setLines] = useState<Line[]>([]);
   const [input, setInput] = useState("");
@@ -68,16 +74,29 @@ export default function AgentPanel() {
     let input: unknown[] = [{ role: "user", content: text }];
     let convo = convoFor;
     if (prevId.current.for !== convo) prevId.current = { for: convo };
+    // The run id labels this send() in the server log line and in the OpenAI dashboard entry of
+    // every step, so a transcript and the traces behind it can be matched up afterwards.
+    const runId = newRunId();
+    const t0 = performance.now();
+    let steps = 0;
     try {
-      for (let step = 0; step < 24; step++) {
+      for (let step = 0; step < MAX_STEPS; step++) {
+        steps = step + 1;
         // The server builds the model's tool list from the same specs this page registers; it does
         // not take one from here, so /api/agent cannot be driven with tools of someone's choosing.
         const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ input, previous_response_id: prevId.current.id }),
+          body: JSON.stringify({ input, previous_response_id: prevId.current.id, run_id: runId, step }),
         });
-        const data = (await res.json()) as { response_id?: string; text?: string; calls?: { call_id: string; name: string; arguments: string }[]; error?: string };
+        const data = (await res.json()) as {
+          response_id?: string;
+          status?: string;
+          incomplete_reason?: string;
+          text?: string;
+          calls?: { call_id: string; name: string; arguments: string }[];
+          error?: string;
+        };
         if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
         const nowId = currentMission()?.id ?? null;
         if (nowId !== null && nowId !== convo) {
@@ -86,7 +105,13 @@ export default function AgentPanel() {
         }
         prevId.current = { for: convo, id: data.response_id };
         if (data.text) push({ who: "agent", text: data.text });
-        if (!data.calls?.length) break;
+        // A cut-off or failed step used to look exactly like "done". Say what happened instead.
+        if (data.status && data.status !== "completed") push({ who: "tool", text: `⚠ model step ${data.status}${data.incomplete_reason ? ` (${data.incomplete_reason})` : ""}` });
+        if (!data.calls?.length) {
+          if (!data.text) push({ who: "agent", text: "Stopped: the model returned no reply and no tool call. Say “continue” to resume." });
+          break;
+        }
+        if (step === MAX_STEPS - 1) push({ who: "agent", text: `Stopped after ${MAX_STEPS} model steps. Say “continue” to resume.` });
         // Execute every requested tool call concurrently (the server serializes writes with compare-and-set).
         for (const call of data.calls) push({ who: "tool", text: `▶ ${call.name}(${call.arguments.slice(0, 80)}${call.arguments.length > 80 ? "…" : ""})` });
         input = await Promise.all(
@@ -111,6 +136,7 @@ export default function AgentPanel() {
     } catch (e) {
       push({ who: "agent", text: `Error: ${(e as Error).message}` });
     } finally {
+      push({ who: "tool", text: `run ${runId} · ${steps} step${steps === 1 ? "" : "s"} · ${((performance.now() - t0) / 1000).toFixed(0)}s` });
       setBusy(false);
     }
   }

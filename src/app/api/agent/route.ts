@@ -7,6 +7,9 @@
  * The endpoint is public, so it must not be usable as a general model proxy: the tool list comes
  * from `specs` rather than the caller, the caller may only send user text and tool outputs, the
  * instructions ride on every request, and output length and daily spend are capped.
+ *
+ * Every step logs one JSON line tagged `agent-step` (run id, status, usage, calls) and returns the
+ * model's response status, so a step cut off by the token cap is visible in the panel and in the logs.
  */
 export const maxDuration = 60;
 
@@ -16,6 +19,21 @@ import { specs } from "@/lib/webmcp/specs";
 type Body = {
   input: unknown[]; // Responses API input items: user message or function_call_output items
   previous_response_id?: string;
+  run_id?: string; // panel-generated label for one send(); ties Vercel log lines to OpenAI dashboard entries
+  step?: number; // 0-based step within that run
+};
+
+type ResponsesOutput =
+  | { type: "message"; content: { type: string; text?: string }[] }
+  | { type: "function_call"; call_id: string; name: string; arguments: string }
+  | { type: string };
+type ResponsesBody = {
+  id: string;
+  model?: string;
+  status?: string; // completed | incomplete | failed | …
+  incomplete_details?: { reason?: string } | null;
+  output: ResponsesOutput[];
+  usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number }; output_tokens_details?: { reasoning_tokens?: number } };
 };
 
 const SYSTEM = [
@@ -36,6 +54,8 @@ const MAX_OUTPUT_TOKENS = 2000;
 const MAX_ITEMS = 30;
 const MAX_USER_CHARS = 2000;
 const MAX_TOOL_OUTPUT_CHARS = 8000;
+const RUN_ID = /^[A-Za-z0-9_-]{1,40}$/;
+const LOG_ARGS_CHARS = 120;
 
 const str = (v: unknown, max: number) => typeof v === "string" && v.length <= max;
 
@@ -75,12 +95,21 @@ export async function POST(req: Request) {
   if (bad) return Response.json({ error: bad }, { status: 400 });
   const previous = body.previous_response_id;
   if (previous !== undefined && !str(previous, 200)) return Response.json({ error: "previous_response_id must be a string" }, { status: 400 });
+  const runId = body.run_id;
+  if (runId !== undefined && !(typeof runId === "string" && RUN_ID.test(runId))) return Response.json({ error: "run_id must match [A-Za-z0-9_-]{1,40}" }, { status: 400 });
+  const step = body.step;
+  if (step !== undefined && !(Number.isInteger(step) && step >= 0 && step < 1000)) return Response.json({ error: "step must be an integer in [0, 1000)" }, { status: 400 });
 
+  const model = process.env.OPENAI_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini";
+  // One structured line per step for Vercel's runtime logs (`vercel logs`, grep "agent-step"). The same
+  // run_id/step ride to OpenAI as metadata, so a dashboard log entry and a Vercel line name each other.
+  const log = (fields: Record<string, unknown>) => console.log(JSON.stringify({ tag: "agent-step", run_id: runId, step, previous_response_id: previous, ...fields }));
+  const t0 = performance.now();
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
     body: JSON.stringify({
-      model: process.env.OPENAI_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.4-mini",
+      model,
       // Instructions are NOT inherited across previous_response_id, so they ride on every request:
       // sending them only on the first turn left every later turn as a bare model with our tools.
       instructions: SYSTEM,
@@ -89,14 +118,17 @@ export async function POST(req: Request) {
       tools: specs.map((s) => ({ type: "function", name: s.name, description: s.description.slice(0, 1024), parameters: s.inputSchema })),
       parallel_tool_calls: true, // mission writes are compare-and-set, so parallel searches are safe
       max_output_tokens: MAX_OUTPUT_TOKENS,
+      ...(runId ? { metadata: { run_id: runId, ...(step !== undefined ? { step: String(step) } : {}) } } : {}),
     }),
     signal: req.signal,
   });
-  if (!res.ok) return Response.json({ error: `openai ${res.status}: ${(await res.text()).slice(0, 300)}` }, { status: 502 });
-  const data = (await res.json()) as {
-    id: string;
-    output: ({ type: "message"; content: { type: string; text?: string }[] } | { type: "function_call"; call_id: string; name: string; arguments: string } | { type: string })[];
-  };
+  const ms = Math.round(performance.now() - t0);
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 300);
+    log({ model, ms, http: res.status, error: detail });
+    return Response.json({ error: `openai ${res.status}: ${detail}` }, { status: 502 });
+  }
+  const data = (await res.json()) as ResponsesBody;
   const calls = data.output.filter((o): o is { type: "function_call"; call_id: string; name: string; arguments: string } => o.type === "function_call");
   const text = data.output
     .filter((o): o is { type: "message"; content: { type: string; text?: string }[] } => o.type === "message")
@@ -104,5 +136,31 @@ export async function POST(req: Request) {
     .filter((c) => c.type === "output_text")
     .map((c) => c.text)
     .join("\n");
-  return Response.json({ response_id: data.id, text, calls: calls.map((c) => ({ call_id: c.call_id, name: c.name, arguments: c.arguments })) });
+  // A step that was cut off (max_output_tokens, content filter) or failed used to look exactly like
+  // "done": no calls, maybe no text. The panel now gets the status and says so.
+  const status = data.status ?? "completed";
+  const incomplete_reason = data.incomplete_details?.reason;
+  log({
+    model: data.model ?? model,
+    ms,
+    response_id: data.id,
+    status,
+    ...(incomplete_reason ? { incomplete_reason } : {}),
+    usage: data.usage && {
+      in: data.usage.input_tokens,
+      cached: data.usage.input_tokens_details?.cached_tokens,
+      out: data.usage.output_tokens,
+      reasoning: data.usage.output_tokens_details?.reasoning_tokens,
+    },
+    text_chars: text.length,
+    calls: calls.map((c) => ({ name: c.name, args: c.arguments.slice(0, LOG_ARGS_CHARS) })),
+    output_types: data.output.map((o) => o.type),
+  });
+  return Response.json({
+    response_id: data.id,
+    status,
+    ...(incomplete_reason ? { incomplete_reason } : {}),
+    text,
+    calls: calls.map((c) => ({ call_id: c.call_id, name: c.name, arguments: c.arguments })),
+  });
 }
